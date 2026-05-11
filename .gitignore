@@ -1,0 +1,23 @@
+node_modules/
+dist/
+.env
+.env.local
+
+# pnpm
+.pnpm-store/
+
+# Python venv for embeddings
+packages/embeddings/.venv/
+
+# Vite
+apps/web/dist/
+
+# Embeddings — large precomputed files, committed separately
+data/ranks/
+
+# Runtime session state
+data/sessions.json
+
+# OS
+.DS_Store
+Thumbs.db

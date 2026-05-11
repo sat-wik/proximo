@@ -1,0 +1,10 @@
+{
+  "name": "@closer/embeddings",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "curate": "python3 scripts/curate-words.py",
+    "precompute": "python3 scripts/precompute.py",
+    "verify": "python3 scripts/verify.py"
+  }
+}
