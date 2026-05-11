@@ -24,9 +24,8 @@ function rankTheme(rank: number) {
 }
 
 function barWidth(rank: number): number {
-  // rank 1 → 100%, rank 10k → 50%, rank 20k → 1%
-  const normalized = (rank - 1) / (DICTIONARY_SIZE - 1);
-  return Math.max(1, Math.round((1 - normalized) * 100));
+  // rank 1 → 100%, rank 500 → 50%, rank 1000 → 25%
+  return Math.max(1, Math.round(100 * Math.pow(2, -(rank - 1) / 499)));
 }
 
 // Shared row content — used for both the pinned row and the sorted list
