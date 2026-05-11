@@ -42,7 +42,7 @@ function GuessRowContent({
   const width = barWidth(g.rank);
   return (
     <div
-      className={`relative overflow-hidden w-full md:w-1/2 md:mx-auto ${
+      className={`relative overflow-hidden w-full ${
         isOutlined
           ? 'ring-2 ring-inset ring-white/80'
           : 'border-b border-slate-800/60'
@@ -183,7 +183,7 @@ export default function GameView({
             </p>
           </div>
         ) : (
-          <>
+          <div className="max-w-xl mx-auto">
             {/* ── Pinned: most recent guess ── */}
             {newestGuess && (
               <div className="border-b-2 border-slate-700">
@@ -214,7 +214,7 @@ export default function GameView({
                 </li>
               ))}
             </ul>
-          </>
+          </div>
         )}
       </main>
 
