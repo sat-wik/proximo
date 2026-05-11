@@ -12,7 +12,6 @@ interface Props {
   onNextRound: () => void;
   guessError: string | null;
   pendingGuess: boolean;
-  debugTarget?: string;
 }
 
 function rankTheme(rank: number) {
@@ -25,10 +24,9 @@ function rankTheme(rank: number) {
 }
 
 function barWidth(rank: number): number {
-  // Quadratic curve: hot words get long bars, cold words get very short ones.
-  // rank 1 → 42%, rank 5k → 16%, rank 10k → 6%, rank 15k → 1%
+  // rank 1 → 100%, rank 5k → 56%, rank 10k → 25%, rank 20k → 1%
   const normalized = (rank - 1) / (DICTIONARY_SIZE - 1);
-  return Math.max(1, Math.round(Math.pow(1 - normalized, 2) * 42));
+  return Math.max(1, Math.round(Math.pow(1 - normalized, 2) * 100));
 }
 
 // Shared row content — used for both the pinned row and the sorted list
@@ -80,7 +78,6 @@ export default function GameView({
   onNextRound,
   guessError,
   pendingGuess,
-  debugTarget,
 }: Props) {
   const navigate = useNavigate();
   const [input, setInput] = useState('');
@@ -167,9 +164,6 @@ export default function GameView({
             <span className="text-sm font-bold text-white leading-tight">
               {state.round} / 3
             </span>
-            {debugTarget && (
-              <span className="text-[10px] text-yellow-500 font-mono mt-0.5">{debugTarget}</span>
-            )}
           </div>
 
           <div className="w-24 text-right">

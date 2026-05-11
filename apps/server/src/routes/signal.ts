@@ -81,7 +81,7 @@ export function handleSignaling(socket: WebSocket): void {
         session.targetWord = await getRandomTarget();
         session.gameState = initialGameState();
         touchSession(sessionId);
-        broadcast(session, { type: 'game-state', state: session.gameState, debugTarget: session.targetWord });
+        broadcast(session, { type: 'game-state', state: session.gameState });
       }
       return;
     }
@@ -109,7 +109,7 @@ export function handleSignaling(socket: WebSocket): void {
 
       session.gameState = state;
       touchSession(sessionId);
-      broadcast(session, { type: 'game-state', state, debugTarget: session.targetWord });
+      broadcast(session, { type: 'game-state', state });
       return;
     }
 
@@ -122,7 +122,7 @@ export function handleSignaling(socket: WebSocket): void {
       session.targetWord = await getRandomTarget(session.targetWord ? [session.targetWord] : []);
       session.gameState = nextRoundState(session.gameState);
       touchSession(sessionId);
-      broadcast(session, { type: 'game-state', state: session.gameState, debugTarget: session.targetWord });
+      broadcast(session, { type: 'game-state', state: session.gameState });
     }
   });
 

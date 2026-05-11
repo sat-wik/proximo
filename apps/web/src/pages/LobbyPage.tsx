@@ -7,7 +7,7 @@ type LobbyState = 'connecting' | 'waiting' | 'ready' | 'error';
 
 type ServerMsg =
   | { type: 'joined'; role: 'host' | 'guest' }
-  | { type: 'game-state'; state: GameState; debugTarget?: string }
+  | { type: 'game-state'; state: GameState }
   | { type: 'guess-rejected'; reason: string }
   | { type: 'error'; message: string };
 
@@ -19,7 +19,6 @@ export default function LobbyPage() {
   const [role, setRole] = useState<'host' | 'guest' | null>(null);
   const [copied, setCopied] = useState(false);
   const [gameState, setGameState] = useState<GameState | null>(null);
-  const [debugTarget, setDebugTarget] = useState<string | null>(null);
   const [guessError, setGuessError] = useState<string | null>(null);
   const [pendingGuess, setPendingGuess] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
@@ -76,7 +75,6 @@ export default function LobbyPage() {
 
       if (msg.type === 'game-state') {
         setGameState(msg.state);
-        if (msg.debugTarget) setDebugTarget(msg.debugTarget);
         setPendingGuess(false);
         setGuessError(null);
         setLobbyState('ready');
@@ -133,7 +131,6 @@ export default function LobbyPage() {
         onNextRound={handleNextRound}
         guessError={guessError}
         pendingGuess={pendingGuess}
-        debugTarget={debugTarget ?? undefined}
       />
     );
   }
