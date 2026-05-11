@@ -29,7 +29,7 @@ export default function HomePage() {
       <div className="w-full max-w-sm flex flex-col items-center gap-10">
 
         <div className="text-center">
-          <h1 className="text-7xl font-bold tracking-tight">Closer</h1>
+          <h1 className="text-7xl font-bold tracking-tight">Proximo</h1>
           <p className="text-slate-400 text-base mt-3 leading-relaxed">
             Two players. One hidden word. Guess by similarity — lower score wins.
           </p>

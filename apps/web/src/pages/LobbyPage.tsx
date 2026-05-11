@@ -146,7 +146,7 @@ export default function LobbyPage() {
       <div className="w-full max-w-sm flex flex-col items-center gap-10">
 
         <div className="text-center">
-          <h1 className="text-6xl font-bold tracking-tight">Closer</h1>
+          <h1 className="text-6xl font-bold tracking-tight">Proximo</h1>
           <p className="text-slate-500 text-sm mt-2">real-time word duel</p>
         </div>
 
