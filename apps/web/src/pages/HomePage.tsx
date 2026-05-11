@@ -4,15 +4,19 @@ import { useNavigate } from 'react-router-dom';
 export default function HomePage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function startMatch() {
     setLoading(true);
+    setError(null);
     try {
       const base = import.meta.env.VITE_API_URL ?? '';
       const res = await fetch(`${base}/session`, { method: 'POST' });
+      if (!res.ok) throw new Error(`Server error: ${res.status}`);
       const { sessionId } = await res.json();
       navigate(`/game/${sessionId}`);
-    } catch {
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not reach server.');
       setLoading(false);
     }
   }
@@ -38,6 +42,10 @@ export default function HomePage() {
         >
           {loading ? 'Creating…' : 'Start a Match'}
         </button>
+
+        {error && (
+          <p className="text-red-400 text-sm text-center -mt-4">{error}</p>
+        )}
 
         <div className="w-full flex flex-col gap-3">
           <Hint icon="🎯" text="Guess words. Closer = lower rank." />
