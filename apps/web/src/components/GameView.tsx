@@ -97,8 +97,14 @@ export default function GameView({
   const [input, setInput] = useState('');
   const [revealingWord, setRevealingWord] = useState(false);
   const [giveUpModal, setGiveUpModal] = useState(false);
+  const [notification, setNotification] = useState<'hint-accepted' | 'hint-rejected' | 'giveup-accepted' | 'giveup-rejected' | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+
+  // Refs to track previous values for detecting accept/reject transitions
+  const prevHintReqRef   = useRef(state.hintRequest);
+  const prevHintsLenRef  = useRef(state.hints.length);
+  const prevGiveUpReqRef = useRef(state.giveUpRequest);
 
   const isMyTurn = state.currentTurn === myRole && state.phase === 'playing';
 
@@ -160,6 +166,30 @@ export default function GameView({
     const t = setTimeout(() => setRevealingWord(false), 5000);
     return () => clearTimeout(t);
   }, [state.phase]);
+
+  // Detect hint accepted / rejected
+  useEffect(() => {
+    if (prevHintReqRef.current === myRole && state.hintRequest === null) {
+      setNotification(state.hints.length > prevHintsLenRef.current ? 'hint-accepted' : 'hint-rejected');
+    }
+    prevHintReqRef.current = state.hintRequest;
+    prevHintsLenRef.current = state.hints.length;
+  }, [state.hintRequest, state.hints.length, myRole]);
+
+  // Detect give-up accepted / rejected
+  useEffect(() => {
+    if (prevGiveUpReqRef.current?.player === myRole && state.giveUpRequest === null) {
+      setNotification(state.phase === 'playing' ? 'giveup-rejected' : 'giveup-accepted');
+    }
+    prevGiveUpReqRef.current = state.giveUpRequest;
+  }, [state.giveUpRequest, state.phase, myRole]);
+
+  // Auto-clear notification
+  useEffect(() => {
+    if (!notification) return;
+    const t = setTimeout(() => setNotification(null), 2400);
+    return () => clearTimeout(t);
+  }, [notification]);
 
   function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -349,6 +379,24 @@ export default function GameView({
         </div>
       )}
 
+      {/* ── Accept / Reject notification ── */}
+      {notification && (
+        <div className="absolute inset-0 z-50 pointer-events-none flex items-center justify-center px-6">
+          <div className="notif-card bg-slate-900/95 border border-slate-700 rounded-2xl px-8 py-6 flex flex-col items-center gap-3 shadow-2xl">
+            {notification.includes('rejected') ? (
+              <span className="shake-icon text-5xl select-none">💔</span>
+            ) : (
+              <div className="pop-icon w-14 h-14 rounded-full bg-emerald-500 flex items-center justify-center">
+                <span className="text-white text-3xl font-bold leading-none">✓</span>
+              </div>
+            )}
+            <p className="text-white font-semibold text-sm text-center">
+              {notification.includes('rejected') ? 'Friend rejected your request.' : 'Your friend accepted!'}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* ── Hint request modal (received from other player) ── */}
       {state.hintRequest !== null && state.hintRequest !== myRole && (
         <div className="absolute inset-0 z-30 bg-black/70 flex items-center justify-center px-6">
@@ -369,6 +417,39 @@ export default function GameView({
               </button>
               <button
                 onClick={onRejectHint}
+                className="w-full py-3 rounded-xl bg-slate-800 active:bg-slate-700 text-slate-300 text-sm font-medium transition-colors"
+              >
+                Reject
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Give-up request modal (received from other player) ── */}
+      {theirGiveUpRequest && (
+        <div className="absolute inset-0 z-30 bg-black/70 flex items-center justify-center px-6">
+          <div className="w-full max-w-xs bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden">
+            <div className="px-5 pt-5 pb-3 text-center">
+              <p className="text-2xl mb-2">🏳️</p>
+              <p className="text-white font-semibold text-base">Friend Wants to Give Up</p>
+              <p className="text-slate-400 text-sm mt-1">
+                They want to give up the{' '}
+                <span className="text-white font-medium">{theirGiveUpRequest.scope}</span>.
+                {theirGiveUpRequest.scope === 'game'
+                  ? ' This will end the match immediately.'
+                  : ' This will end the current round.'}
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 px-4 pb-4">
+              <button
+                onClick={onAcceptGiveUp}
+                className="w-full py-3 rounded-xl bg-orange-700 active:bg-orange-800 text-white text-sm font-semibold transition-colors"
+              >
+                Accept
+              </button>
+              <button
+                onClick={onRejectGiveUp}
                 className="w-full py-3 rounded-xl bg-slate-800 active:bg-slate-700 text-slate-300 text-sm font-medium transition-colors"
               >
                 Reject
@@ -440,7 +521,7 @@ export default function GameView({
                 )}
                 <button
                   onClick={() => setGiveUpModal(true)}
-                  className="text-xs font-medium px-3 py-1.5 rounded-lg bg-slate-800 active:bg-slate-700 text-slate-400 transition-colors"
+                  className="text-xs font-medium px-3 py-1.5 rounded-lg bg-red-950/60 active:bg-red-900/60 border border-red-800/50 text-red-400 transition-colors"
                 >
                   Give Up
                 </button>
@@ -452,33 +533,12 @@ export default function GameView({
                 <p className="text-xs text-purple-400">Hint requested — waiting for friend…</p>
               </div>
             )}
-            {/* ── Give-up request from other player ── */}
+            {/* ── Give-up pending (my request) ── */}
             {myGiveUpRequest && (
               <div className="flex items-center justify-between mb-2 px-1">
                 <p className="text-xs text-orange-400">
                   Waiting for friend to accept give up ({myGiveUpRequest.scope})…
                 </p>
-              </div>
-            )}
-            {theirGiveUpRequest && (
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-xs text-orange-300">
-                  Friend wants to give up the {theirGiveUpRequest.scope}
-                </p>
-                <div className="flex gap-2">
-                  <button
-                    onClick={onRejectGiveUp}
-                    className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-800 active:bg-slate-700 text-slate-400 transition-colors"
-                  >
-                    Reject
-                  </button>
-                  <button
-                    onClick={onAcceptGiveUp}
-                    className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-orange-700 active:bg-orange-800 text-white transition-colors"
-                  >
-                    Accept
-                  </button>
-                </div>
               </div>
             )}
 
