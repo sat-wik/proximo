@@ -349,9 +349,38 @@ export default function GameView({
         </div>
       )}
 
+      {/* ── Hint request modal (received from other player) ── */}
+      {state.hintRequest !== null && state.hintRequest !== myRole && (
+        <div className="absolute inset-0 z-30 bg-black/70 flex items-center justify-center px-6">
+          <div className="w-full max-w-xs bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden">
+            <div className="px-5 pt-5 pb-3 text-center">
+              <p className="text-2xl mb-2">💡</p>
+              <p className="text-white font-semibold text-base">Hint Request</p>
+              <p className="text-slate-400 text-sm mt-1">
+                Your friend wants a hint. Accepting will generate an AI clue visible to both players.
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 px-4 pb-4">
+              <button
+                onClick={onAcceptHint}
+                className="w-full py-3 rounded-xl bg-purple-700 active:bg-purple-800 text-white text-sm font-semibold transition-colors"
+              >
+                Accept
+              </button>
+              <button
+                onClick={onRejectHint}
+                className="w-full py-3 rounded-xl bg-slate-800 active:bg-slate-700 text-slate-300 text-sm font-medium transition-colors"
+              >
+                Reject
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Give-up modal ── */}
       {giveUpModal && (
-        <div className="absolute inset-0 z-30 bg-black/70 flex items-end justify-center pb-8 px-6">
+        <div className="absolute inset-0 z-30 bg-black/70 flex items-center justify-center px-6">
           <div className="w-full max-w-xs bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden">
             <div className="px-5 pt-5 pb-3">
               <p className="text-white font-semibold text-base text-center">Give Up</p>
@@ -423,26 +452,6 @@ export default function GameView({
                 <p className="text-xs text-purple-400">Hint requested — waiting for friend…</p>
               </div>
             )}
-            {state.hintRequest !== null && state.hintRequest !== myRole && (
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-xs text-purple-300">Friend wants a hint</p>
-                <div className="flex gap-2">
-                  <button
-                    onClick={onRejectHint}
-                    className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-800 active:bg-slate-700 text-slate-400 transition-colors"
-                  >
-                    Reject
-                  </button>
-                  <button
-                    onClick={onAcceptHint}
-                    className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-purple-700 active:bg-purple-800 text-white transition-colors"
-                  >
-                    Accept
-                  </button>
-                </div>
-              </div>
-            )}
-
             {/* ── Give-up request from other player ── */}
             {myGiveUpRequest && (
               <div className="flex items-center justify-between mb-2 px-1">
