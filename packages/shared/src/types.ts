@@ -7,6 +7,7 @@ export interface GuessEntry {
   word: string;
   rank: number;
   bonuses: string[];
+  streak?: number; // set when a streak bonus fires; value is the streak length (≥ 2)
 }
 
 export interface GameState {
@@ -21,6 +22,7 @@ export interface GameState {
   revealedTarget?: string;
   hintRequest: 'host' | 'guest' | null;
   hints: string[];
+  giveUpRequest: { player: 'host' | 'guest'; scope: 'round' | 'game' } | null;
 }
 
 export type GameMode = 'duel' | 'cooperative' | 'subversion';

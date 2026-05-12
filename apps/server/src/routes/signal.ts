@@ -2,7 +2,7 @@ import type { WebSocket } from 'ws';
 import { z } from 'zod';
 import { getSession, touchSession } from '../session-store.js';
 import { getRandomTarget } from '../services/target-service.js';
-import { applyGuess, applyHint, initialGameState, nextRoundState } from '../game/engine.js';
+import { applyGuess, applyGiveUp, applyHint, initialGameState, nextRoundState } from '../game/engine.js';
 
 const ClientMessage = z.discriminatedUnion('type', [
   z.object({ type: z.literal('join'), sessionId: z.string() }),
@@ -10,6 +10,10 @@ const ClientMessage = z.discriminatedUnion('type', [
   z.object({ type: z.literal('next-round') }),
   z.object({ type: z.literal('request-hint') }),
   z.object({ type: z.literal('accept-hint') }),
+  z.object({ type: z.literal('reject-hint') }),
+  z.object({ type: z.literal('give-up'), scope: z.enum(['round', 'game']) }),
+  z.object({ type: z.literal('accept-give-up') }),
+  z.object({ type: z.literal('reject-give-up') }),
 ]);
 
 function send(socket: WebSocket, msg: object): void {
@@ -145,10 +149,72 @@ export function handleSignaling(socket: WebSocket): void {
       if (!sessionId || !role) return;
       const session = getSession(sessionId);
       if (!session?.gameState || !session.targetWord) return;
-      // Only the other player can accept
       if (session.gameState.hintRequest === null || session.gameState.hintRequest === role) return;
 
       session.gameState = await applyHint(session.gameState, session.targetWord);
+      touchSession(sessionId);
+      broadcast(session, { type: 'game-state', state: session.gameState });
+    }
+
+    // ── reject-hint ───────────────────────────────────────────────────────
+    if (msg.type === 'reject-hint') {
+      if (!sessionId || !role) return;
+      const session = getSession(sessionId);
+      if (!session?.gameState) return;
+      if (session.gameState.hintRequest === null || session.gameState.hintRequest === role) return;
+
+      session.gameState = { ...session.gameState, hintRequest: null };
+      touchSession(sessionId);
+      broadcast(session, { type: 'game-state', state: session.gameState });
+    }
+
+    // ── give-up ───────────────────────────────────────────────────────────
+    if (msg.type === 'give-up') {
+      if (!sessionId || !role) return;
+      const session = getSession(sessionId);
+      if (!session?.gameState || !session.targetWord) return;
+      if (session.gameState.phase !== 'playing') return;
+
+      const gs = session.gameState;
+      const totHost  = gs.roundScores.reduce((s, r) => s + r.host,  0) + gs.scores.host;
+      const totGuest = gs.roundScores.reduce((s, r) => s + r.guest, 0) + gs.scores.guest;
+      const myTotal    = role === 'host' ? totHost : totGuest;
+      const theirTotal = role === 'host' ? totGuest : totHost;
+      const isLeading  = myTotal > theirTotal;
+
+      if (isLeading) {
+        // Needs other player's consent
+        session.gameState = { ...gs, giveUpRequest: { player: role, scope: msg.scope } };
+      } else {
+        // Not leading — give up directly
+        session.gameState = applyGiveUp(gs, role, msg.scope, session.targetWord);
+      }
+      touchSession(sessionId);
+      broadcast(session, { type: 'game-state', state: session.gameState });
+    }
+
+    // ── accept-give-up ────────────────────────────────────────────────────
+    if (msg.type === 'accept-give-up') {
+      if (!sessionId || !role) return;
+      const session = getSession(sessionId);
+      if (!session?.gameState || !session.targetWord) return;
+      const req = session.gameState.giveUpRequest;
+      if (!req || req.player === role) return; // only other player can accept
+
+      session.gameState = applyGiveUp(session.gameState, req.player, req.scope, session.targetWord);
+      touchSession(sessionId);
+      broadcast(session, { type: 'game-state', state: session.gameState });
+    }
+
+    // ── reject-give-up ────────────────────────────────────────────────────
+    if (msg.type === 'reject-give-up') {
+      if (!sessionId || !role) return;
+      const session = getSession(sessionId);
+      if (!session?.gameState) return;
+      const req = session.gameState.giveUpRequest;
+      if (!req || req.player === role) return;
+
+      session.gameState = { ...session.gameState, giveUpRequest: null };
       touchSession(sessionId);
       broadcast(session, { type: 'game-state', state: session.gameState });
     }

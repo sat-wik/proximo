@@ -54,6 +54,22 @@ export default function LobbyPage() {
     sendMsg({ type: 'accept-hint' });
   }
 
+  function handleRejectHint() {
+    sendMsg({ type: 'reject-hint' });
+  }
+
+  function handleGiveUp(scope: 'round' | 'game') {
+    sendMsg({ type: 'give-up', scope });
+  }
+
+  function handleAcceptGiveUp() {
+    sendMsg({ type: 'accept-give-up' });
+  }
+
+  function handleRejectGiveUp() {
+    sendMsg({ type: 'reject-give-up' });
+  }
+
   useEffect(() => {
     if (!sessionId) { navigate('/'); return; }
 
@@ -139,6 +155,10 @@ export default function LobbyPage() {
         onNextRound={handleNextRound}
         onRequestHint={handleRequestHint}
         onAcceptHint={handleAcceptHint}
+        onRejectHint={handleRejectHint}
+        onGiveUp={handleGiveUp}
+        onAcceptGiveUp={handleAcceptGiveUp}
+        onRejectGiveUp={handleRejectGiveUp}
         guessError={guessError}
         pendingGuess={pendingGuess}
       />

@@ -29,3 +29,19 @@
 .guess-item {
   animation: guess-in 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
 }
+
+@keyframes flicker {
+  0%   { opacity: 1;    transform: scale(1)    rotate(-1deg); }
+  20%  { opacity: 0.85; transform: scale(1.08) rotate(1.5deg); }
+  40%  { opacity: 1;    transform: scale(0.96) rotate(-2deg);  }
+  60%  { opacity: 0.9;  transform: scale(1.05) rotate(1deg);   }
+  80%  { opacity: 1;    transform: scale(0.98) rotate(-1deg);  }
+  100% { opacity: 1;    transform: scale(1)    rotate(0deg);   }
+}
+
+.streak-fire {
+  animation: flicker 0.85s ease-in-out infinite;
+  display: inline-flex;
+  align-items: center;
+  transform-origin: bottom center;
+}

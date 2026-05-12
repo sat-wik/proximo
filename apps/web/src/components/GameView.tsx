@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { DICTIONARY_SIZE } from '@closer/shared';
 import type { GameState, GuessEntry } from '@closer/shared';
 
 export type { GameState, GuessEntry };
@@ -12,6 +11,10 @@ interface Props {
   onNextRound: () => void;
   onRequestHint: () => void;
   onAcceptHint: () => void;
+  onRejectHint: () => void;
+  onGiveUp: (scope: 'round' | 'game') => void;
+  onAcceptGiveUp: () => void;
+  onRejectGiveUp: () => void;
   guessError: string | null;
   pendingGuess: boolean;
 }
@@ -26,11 +29,9 @@ function rankTheme(rank: number) {
 }
 
 function barWidth(rank: number): number {
-  // rank 1 → 100%, rank 500 → 50%, rank 1000 → 25%
   return Math.max(1, Math.round(100 * Math.pow(2, -(rank - 1) / 499)));
 }
 
-// Shared row content — used for both the pinned row and the sorted list
 function GuessRowContent({
   g,
   isMe,
@@ -42,6 +43,9 @@ function GuessRowContent({
 }) {
   const theme = rankTheme(g.rank);
   const width = barWidth(g.rank);
+  // Separate steal badges from streak (streak gets fire treatment)
+  const stealBonuses = g.bonuses.filter((b) => !b.includes('streak'));
+
   return (
     <div
       className={`relative overflow-hidden w-full ${
@@ -50,20 +54,23 @@ function GuessRowContent({
           : 'border-b border-slate-800/60'
       }`}
     >
-      {/* Full-height background bar */}
       <div
         className={`absolute inset-y-0 left-0 ${theme.bar} opacity-50`}
         style={{ width: `${width}%` }}
       />
-      {/* Row content */}
       <div className="relative flex items-center gap-2 px-4 py-3">
         <span className={`w-1.5 h-1.5 rounded-full flex-none ${isMe ? 'bg-emerald-400' : 'bg-slate-500'}`} />
         <span className="flex-1 text-base font-semibold tracking-wide">{g.word}</span>
-        {g.bonuses.map((b) => (
+        {stealBonuses.map((b) => (
           <span key={b} className="text-[10px] px-1.5 py-0.5 rounded bg-purple-900/70 text-purple-300 border border-purple-700/50">
             {b}
           </span>
         ))}
+        {g.streak !== undefined && (
+          <span className="streak-fire text-base font-bold text-orange-400 gap-0.5">
+            🔥<span className="text-[11px] leading-none">{g.streak}</span>
+          </span>
+        )}
         <span className={`text-xs font-bold px-2 py-1 rounded-md min-w-[3.5rem] text-center tabular-nums ${theme.badge}`}>
           {g.rank === 1 ? '★ 1' : `# ${g.rank.toLocaleString()}`}
         </span>
@@ -79,12 +86,17 @@ export default function GameView({
   onNextRound,
   onRequestHint,
   onAcceptHint,
+  onRejectHint,
+  onGiveUp,
+  onAcceptGiveUp,
+  onRejectGiveUp,
   guessError,
   pendingGuess,
 }: Props) {
   const navigate = useNavigate();
   const [input, setInput] = useState('');
   const [revealingWord, setRevealingWord] = useState(false);
+  const [giveUpModal, setGiveUpModal] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -96,17 +108,15 @@ export default function GameView({
   };
   const myTotal    = myRole === 'host' ? totalScores.host  : totalScores.guest;
   const theirTotal = myRole === 'host' ? totalScores.guest : totalScores.host;
+  const isLeading  = myTotal > theirTotal;
 
   const lastRound = state.roundScores[state.roundScores.length - 1] ?? { host: 0, guest: 0 };
   const myLastRound    = myRole === 'host' ? lastRound.host  : lastRound.guest;
   const theirLastRound = myRole === 'host' ? lastRound.guest : lastRound.host;
 
   const newestGuess = state.guesses.length > 0 ? state.guesses[state.guesses.length - 1] : null;
-
-  // Pure rank sort — newest appears pinned above, then again here in rank order
   const sortedGuesses = [...state.guesses].sort((a, b) => a.rank - b.rank);
 
-  // FLIP animation for the sorted list only (pinned row never moves)
   const itemRefs    = useRef<Map<string, HTMLLIElement>>(new Map());
   const prevRectsRef = useRef<Map<string, DOMRect>>(new Map());
 
@@ -147,7 +157,7 @@ export default function GameView({
   useEffect(() => {
     if (state.phase !== 'match-over') return;
     setRevealingWord(true);
-    const t = setTimeout(() => setRevealingWord(false), 10000);
+    const t = setTimeout(() => setRevealingWord(false), 5000);
     return () => clearTimeout(t);
   }, [state.phase]);
 
@@ -158,6 +168,16 @@ export default function GameView({
     onSubmitGuess(word);
     setInput('');
   }
+
+  function handleGiveUpSelect(scope: 'round' | 'game') {
+    setGiveUpModal(false);
+    onGiveUp(scope);
+  }
+
+  const myGiveUpRequest = state.giveUpRequest?.player === myRole ? state.giveUpRequest : null;
+  const theirGiveUpRequest = state.giveUpRequest?.player !== myRole && state.giveUpRequest !== null
+    ? state.giveUpRequest
+    : null;
 
   return (
     <div className="flex flex-col bg-slate-950 text-white" style={{ height: '100dvh' }}>
@@ -198,12 +218,10 @@ export default function GameView({
           <div className="max-w-xl mx-auto">
             {/* ── Hints ── */}
             {state.hints.length > 0 && (
-              <div className="px-4 pt-3 pb-2 flex flex-wrap gap-2 border-b border-slate-800">
-                <span className="text-[10px] uppercase tracking-widest text-slate-500 self-center">Hints</span>
-                {state.hints.map((h) => (
-                  <span key={h} className="text-xs font-semibold px-2.5 py-1 rounded-full bg-purple-900/60 text-purple-300 border border-purple-700/50">
-                    {h}
-                  </span>
+              <div className="px-4 pt-3 pb-2 flex flex-col gap-1.5 border-b border-slate-800">
+                <span className="text-[10px] uppercase tracking-widest text-slate-500">Hints</span>
+                {state.hints.map((h, i) => (
+                  <p key={i} className="text-xs text-purple-300 italic">"{h}"</p>
                 ))}
               </div>
             )}
@@ -331,6 +349,42 @@ export default function GameView({
         </div>
       )}
 
+      {/* ── Give-up modal ── */}
+      {giveUpModal && (
+        <div className="absolute inset-0 z-30 bg-black/70 flex items-end justify-center pb-8 px-6">
+          <div className="w-full max-w-xs bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden">
+            <div className="px-5 pt-5 pb-3">
+              <p className="text-white font-semibold text-base text-center">Give Up</p>
+              <p className="text-slate-400 text-sm text-center mt-1">
+                {isLeading
+                  ? 'You\'re in the lead — your friend must agree.'
+                  : 'What would you like to give up?'}
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 px-4 pb-4">
+              <button
+                onClick={() => handleGiveUpSelect('round')}
+                className="w-full py-3 rounded-xl bg-slate-800 active:bg-slate-700 text-white text-sm font-medium transition-colors"
+              >
+                This Round
+              </button>
+              <button
+                onClick={() => handleGiveUpSelect('game')}
+                className="w-full py-3 rounded-xl bg-red-900/60 active:bg-red-900 border border-red-800/60 text-red-300 text-sm font-medium transition-colors"
+              >
+                The Entire Game
+              </button>
+              <button
+                onClick={() => setGiveUpModal(false)}
+                className="w-full py-3 rounded-xl text-slate-500 text-sm transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Input footer ── */}
       <footer
         className="flex-none border-t border-slate-800 bg-slate-950 px-4 pt-3"
@@ -343,30 +397,79 @@ export default function GameView({
         {state.phase === 'playing' && (
           <>
             {/* ── Hint controls ── */}
-            {state.hintRequest === null && (
-              <div className="flex justify-end mb-2">
+            {state.hintRequest === null && state.giveUpRequest === null && (
+              <div className="flex justify-between items-center mb-2">
+                {state.guesses.length >= 50 ? (
+                  <button
+                    onClick={onRequestHint}
+                    className="text-xs font-medium px-3 py-1.5 rounded-lg bg-slate-800 active:bg-slate-700 text-purple-300 border border-purple-800/50 transition-colors"
+                  >
+                    💡 Request Hint
+                  </button>
+                ) : (
+                  <span />
+                )}
                 <button
-                  onClick={onRequestHint}
-                  className="text-xs font-medium px-3 py-1.5 rounded-lg bg-slate-800 active:bg-slate-700 text-purple-300 border border-purple-800/50 transition-colors"
+                  onClick={() => setGiveUpModal(true)}
+                  className="text-xs font-medium px-3 py-1.5 rounded-lg bg-slate-800 active:bg-slate-700 text-slate-400 transition-colors"
                 >
-                  💡 Request Hint
+                  Give Up
                 </button>
               </div>
             )}
+
             {state.hintRequest === myRole && (
               <div className="flex items-center justify-between mb-2 px-1">
                 <p className="text-xs text-purple-400">Hint requested — waiting for friend…</p>
               </div>
             )}
             {state.hintRequest !== null && state.hintRequest !== myRole && (
-              <div className="flex items-center justify-between mb-2 px-1">
+              <div className="flex items-center justify-between mb-2">
                 <p className="text-xs text-purple-300">Friend wants a hint</p>
-                <button
-                  onClick={onAcceptHint}
-                  className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-purple-700 active:bg-purple-800 text-white transition-colors"
-                >
-                  Accept
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={onRejectHint}
+                    className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-800 active:bg-slate-700 text-slate-400 transition-colors"
+                  >
+                    Reject
+                  </button>
+                  <button
+                    onClick={onAcceptHint}
+                    className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-purple-700 active:bg-purple-800 text-white transition-colors"
+                  >
+                    Accept
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ── Give-up request from other player ── */}
+            {myGiveUpRequest && (
+              <div className="flex items-center justify-between mb-2 px-1">
+                <p className="text-xs text-orange-400">
+                  Waiting for friend to accept give up ({myGiveUpRequest.scope})…
+                </p>
+              </div>
+            )}
+            {theirGiveUpRequest && (
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs text-orange-300">
+                  Friend wants to give up the {theirGiveUpRequest.scope}
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={onRejectGiveUp}
+                    className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-800 active:bg-slate-700 text-slate-400 transition-colors"
+                  >
+                    Reject
+                  </button>
+                  <button
+                    onClick={onAcceptGiveUp}
+                    className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-orange-700 active:bg-orange-800 text-white transition-colors"
+                  >
+                    Accept
+                  </button>
+                </div>
               </div>
             )}
 

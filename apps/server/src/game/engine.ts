@@ -21,6 +21,7 @@ export function initialGameState(): GameState {
     matchWinner: null,
     hintRequest: null,
     hints: [],
+    giveUpRequest: null,
   };
 }
 
@@ -37,6 +38,53 @@ export function nextRoundState(current: GameState): GameState {
     matchWinner: null,
     hintRequest: null,
     hints: [],
+    giveUpRequest: null,
+  };
+}
+
+export function applyGiveUp(
+  state: GameState,
+  givingUp: 'host' | 'guest',
+  scope: 'round' | 'game',
+  target: string,
+): GameState {
+  const winner: 'host' | 'guest' = givingUp === 'host' ? 'guest' : 'host';
+  const roundScores = [...state.roundScores, { ...state.scores }];
+
+  if (scope === 'game') {
+    return {
+      ...state,
+      phase: 'match-over',
+      roundScores,
+      roundWinner: winner,
+      matchWinner: winner,
+      revealedTarget: target,
+      giveUpRequest: null,
+    };
+  }
+
+  // scope === 'round'
+  if (state.round === ROUNDS_PER_MATCH) {
+    const totHost  = roundScores.reduce((s, r) => s + r.host,  0);
+    const totGuest = roundScores.reduce((s, r) => s + r.guest, 0);
+    return {
+      ...state,
+      phase: 'match-over',
+      roundScores,
+      roundWinner: winner,
+      matchWinner: totHost >= totGuest ? 'host' : 'guest',
+      revealedTarget: target,
+      giveUpRequest: null,
+    };
+  }
+
+  return {
+    ...state,
+    phase: 'round-over',
+    roundScores,
+    roundWinner: winner,
+    revealedTarget: target,
+    giveUpRequest: null,
   };
 }
 
@@ -97,12 +145,20 @@ export async function applyGuess(
       prevWasSteal = myPrevGuess.rank < bestBeforeMyPrev;
     }
   }
+  let streakLen: number | undefined;
   if (isSteal && prevWasSteal) {
     newScores[player] += STREAK_BONUS_VALUE;
     bonuses.push(`+${STREAK_BONUS_VALUE} streak`);
+    // Count how many consecutive steals this player has including the current one
+    const myGuesses = state.guesses.filter((g) => g.player === player);
+    streakLen = 2; // current steal + myPrevGuess (which prevWasSteal confirmed was a steal)
+    for (let i = myGuesses.length - 2; i >= 0; i--) {
+      if (myGuesses[i].bonuses.some((b) => b.includes('steal'))) streakLen!++;
+      else break;
+    }
   }
 
-  const newGuess: GuessEntry = { player, word, rank, bonuses };
+  const newGuess: GuessEntry = { player, word, rank, bonuses, ...(streakLen !== undefined && { streak: streakLen }) };
   const isKill = rank === 1;
 
   let phase: GameState['phase'] = state.phase;
