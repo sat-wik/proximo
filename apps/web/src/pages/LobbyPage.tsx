@@ -46,6 +46,14 @@ export default function LobbyPage() {
     sendMsg({ type: 'next-round' });
   }
 
+  function handleRequestHint() {
+    sendMsg({ type: 'request-hint' });
+  }
+
+  function handleAcceptHint() {
+    sendMsg({ type: 'accept-hint' });
+  }
+
   useEffect(() => {
     if (!sessionId) { navigate('/'); return; }
 
@@ -129,6 +137,8 @@ export default function LobbyPage() {
         myRole={role!}
         onSubmitGuess={handleSubmitGuess}
         onNextRound={handleNextRound}
+        onRequestHint={handleRequestHint}
+        onAcceptHint={handleAcceptHint}
         guessError={guessError}
         pendingGuess={pendingGuess}
       />

@@ -2,12 +2,14 @@ import type { WebSocket } from 'ws';
 import { z } from 'zod';
 import { getSession, touchSession } from '../session-store.js';
 import { getRandomTarget } from '../services/target-service.js';
-import { applyGuess, initialGameState, nextRoundState } from '../game/engine.js';
+import { applyGuess, applyHint, initialGameState, nextRoundState } from '../game/engine.js';
 
 const ClientMessage = z.discriminatedUnion('type', [
   z.object({ type: z.literal('join'), sessionId: z.string() }),
   z.object({ type: z.literal('submit-guess'), word: z.string().min(1).max(60) }),
   z.object({ type: z.literal('next-round') }),
+  z.object({ type: z.literal('request-hint') }),
+  z.object({ type: z.literal('accept-hint') }),
 ]);
 
 function send(socket: WebSocket, msg: object): void {
@@ -121,6 +123,32 @@ export function handleSignaling(socket: WebSocket): void {
 
       session.targetWord = await getRandomTarget(session.targetWord ? [session.targetWord] : []);
       session.gameState = nextRoundState(session.gameState);
+      touchSession(sessionId);
+      broadcast(session, { type: 'game-state', state: session.gameState });
+    }
+
+    // ── request-hint ──────────────────────────────────────────────────────
+    if (msg.type === 'request-hint') {
+      if (!sessionId || !role) return;
+      const session = getSession(sessionId);
+      if (!session?.gameState || session.gameState.phase !== 'playing') return;
+      // Only one pending request at a time; can't request if you already did
+      if (session.gameState.hintRequest !== null) return;
+
+      session.gameState = { ...session.gameState, hintRequest: role };
+      touchSession(sessionId);
+      broadcast(session, { type: 'game-state', state: session.gameState });
+    }
+
+    // ── accept-hint ───────────────────────────────────────────────────────
+    if (msg.type === 'accept-hint') {
+      if (!sessionId || !role) return;
+      const session = getSession(sessionId);
+      if (!session?.gameState || !session.targetWord) return;
+      // Only the other player can accept
+      if (session.gameState.hintRequest === null || session.gameState.hintRequest === role) return;
+
+      session.gameState = await applyHint(session.gameState, session.targetWord);
       touchSession(sessionId);
       broadcast(session, { type: 'game-state', state: session.gameState });
     }

@@ -19,6 +19,8 @@ export interface GameState {
   roundWinner: 'host' | 'guest' | null;
   matchWinner: 'host' | 'guest' | null;
   revealedTarget?: string;
+  hintRequest: 'host' | 'guest' | null;
+  hints: string[];
 }
 
 export type GameMode = 'duel' | 'cooperative' | 'subversion';
