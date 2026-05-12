@@ -22,6 +22,7 @@ export function initialGameState(): GameState {
     hintRequest: null,
     hints: [],
     giveUpRequest: null,
+    roundEndReason: null,
   };
 }
 
@@ -39,6 +40,7 @@ export function nextRoundState(current: GameState): GameState {
     hintRequest: null,
     hints: [],
     giveUpRequest: null,
+    roundEndReason: null,
   };
 }
 
@@ -64,6 +66,7 @@ export function applyGiveUp(
       matchWinner,
       revealedTarget: target,
       giveUpRequest: null,
+      roundEndReason: 'give-up',
     };
   }
 
@@ -78,6 +81,7 @@ export function applyGiveUp(
       matchWinner,
       revealedTarget: target,
       giveUpRequest: null,
+      roundEndReason: 'give-up',
     };
   }
 
@@ -89,6 +93,7 @@ export function applyGiveUp(
     roundWinner,
     revealedTarget: target,
     giveUpRequest: null,
+    roundEndReason: 'give-up',
   };
 }
 
@@ -167,11 +172,13 @@ export async function applyGuess(
 
   let phase: GameState['phase'] = state.phase;
   let { roundWinner, matchWinner, roundScores, revealedTarget } = state;
+  let roundEndReason: GameState['roundEndReason'] = state.roundEndReason;
 
   if (isKill) {
     roundWinner = player;
     revealedTarget = target;
     roundScores = [...state.roundScores, { ...newScores }];
+    roundEndReason = 'kill';
     phase = 'round-over';
 
     if (state.round === ROUNDS_PER_MATCH) {
@@ -194,6 +201,7 @@ export async function applyGuess(
       roundWinner,
       matchWinner,
       revealedTarget,
+      roundEndReason,
     },
   };
 }

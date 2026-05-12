@@ -23,6 +23,7 @@ export interface GameState {
   hintRequest: 'host' | 'guest' | null;
   hints: string[];
   giveUpRequest: { player: 'host' | 'guest'; scope: 'round' | 'game' } | null;
+  roundEndReason: 'kill' | 'give-up' | null;
 }
 
 export type GameMode = 'duel' | 'cooperative' | 'subversion';
