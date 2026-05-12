@@ -36,15 +36,15 @@ function GuessRowContent({
   g,
   isMe,
   isOutlined,
+  isActiveStreak,
 }: {
   g: GuessEntry;
   isMe: boolean;
   isOutlined: boolean;
+  isActiveStreak: boolean;
 }) {
   const theme = rankTheme(g.rank);
   const width = barWidth(g.rank);
-  // Separate steal badges from streak (streak gets fire treatment)
-  const stealBonuses = g.bonuses.filter((b) => !b.includes('streak'));
 
   return (
     <div
@@ -61,12 +61,12 @@ function GuessRowContent({
       <div className="relative flex items-center gap-2 px-4 py-3">
         <span className={`w-1.5 h-1.5 rounded-full flex-none ${isMe ? 'bg-emerald-400' : 'bg-slate-500'}`} />
         <span className="flex-1 text-base font-semibold tracking-wide">{g.word}</span>
-        {stealBonuses.map((b) => (
+        {g.bonuses.map((b) => (
           <span key={b} className="text-[10px] px-1.5 py-0.5 rounded bg-purple-900/70 text-purple-300 border border-purple-700/50">
             {b}
           </span>
         ))}
-        {g.streak !== undefined && (
+        {isActiveStreak && g.streak !== undefined && (
           <span className="streak-fire text-base font-bold text-orange-400 gap-0.5">
             🔥<span className="text-[11px] leading-none">{g.streak}</span>
           </span>
@@ -122,6 +122,18 @@ export default function GameView({
 
   const newestGuess = state.guesses.length > 0 ? state.guesses[state.guesses.length - 1] : null;
   const sortedGuesses = [...state.guesses].sort((a, b) => a.rank - b.rank);
+
+  // Words that are part of an unbroken steal streak right now (per player)
+  const activeStreakWords = new Set<string>();
+  for (const role of ['host', 'guest'] as const) {
+    const playerGuesses = state.guesses.filter((g) => g.player === role);
+    const run: string[] = [];
+    for (let i = playerGuesses.length - 1; i >= 0; i--) {
+      if (playerGuesses[i].bonuses.some((b) => b.includes('steal'))) run.push(playerGuesses[i].word);
+      else break;
+    }
+    if (run.length >= 2) run.forEach((w) => activeStreakWords.add(w));
+  }
 
   const itemRefs    = useRef<Map<string, HTMLLIElement>>(new Map());
   const prevRectsRef = useRef<Map<string, DOMRect>>(new Map());
@@ -263,6 +275,7 @@ export default function GameView({
                   g={newestGuess}
                   isMe={newestGuess.player === myRole}
                   isOutlined
+                  isActiveStreak={activeStreakWords.has(newestGuess.word)}
                 />
               </div>
             )}
@@ -282,6 +295,7 @@ export default function GameView({
                     g={g}
                     isMe={g.player === myRole}
                     isOutlined={g.word === newestGuess?.word}
+                    isActiveStreak={activeStreakWords.has(g.word)}
                   />
                 </li>
               ))}

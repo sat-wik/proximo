@@ -2,7 +2,6 @@ import type { GameState, GuessEntry } from '@closer/shared';
 import {
   DICTIONARY_SIZE,
   ROUNDS_PER_MATCH,
-  STREAK_BONUS_VALUE,
   STEAL_BONUS_VALUE,
 } from '@closer/shared';
 import { getRank } from '../services/embedding-service.js';
@@ -137,34 +136,20 @@ export async function applyGuess(
   // Steal: this guess is the new closest word overall
   const currentBestRank = state.guesses.reduce((min, g) => Math.min(min, g.rank), Infinity);
   const isSteal = state.guesses.length > 0 && rank < currentBestRank;
-  if (isSteal) {
-    newScores[player] += STEAL_BONUS_VALUE;
-    bonuses.push(`+${STEAL_BONUS_VALUE} steal`);
-  }
 
-  // Streak: you just stole AND your previous guess was also a steal when you made it
-  // (check the history at the time of that guess, not current state)
-  const myPrevGuess = state.guesses.filter((g) => g.player === player).at(-1) ?? null;
-  let prevWasSteal = false;
-  if (myPrevGuess) {
-    const myPrevIdx = state.guesses.findIndex((g) => g.word === myPrevGuess.word);
-    const guessesBefore = state.guesses.slice(0, myPrevIdx);
-    if (guessesBefore.length > 0) {
-      const bestBeforeMyPrev = guessesBefore.reduce((min, g) => Math.min(min, g.rank), Infinity);
-      prevWasSteal = myPrevGuess.rank < bestBeforeMyPrev;
-    }
-  }
+  // Count consecutive steals by this player (current guess counts as 1)
   let streakLen: number | undefined;
-  if (isSteal && prevWasSteal) {
-    newScores[player] += STREAK_BONUS_VALUE;
-    bonuses.push(`+${STREAK_BONUS_VALUE} streak`);
-    // Count how many consecutive steals this player has including the current one
-    const myGuesses = state.guesses.filter((g) => g.player === player);
-    streakLen = 2; // current steal + myPrevGuess (which prevWasSteal confirmed was a steal)
-    for (let i = myGuesses.length - 2; i >= 0; i--) {
-      if (myGuesses[i].bonuses.some((b) => b.includes('steal'))) streakLen!++;
+  if (isSteal) {
+    const myPrevGuesses = state.guesses.filter((g) => g.player === player);
+    let streak = 1;
+    for (let i = myPrevGuesses.length - 1; i >= 0; i--) {
+      if (myPrevGuesses[i].bonuses.some((b) => b.includes('steal'))) streak++;
       else break;
     }
+    const stealBonus = STEAL_BONUS_VALUE * streak;
+    newScores[player] += stealBonus;
+    bonuses.push(`+${stealBonus} steal`);
+    if (streak >= 2) streakLen = streak;
   }
 
   const newGuess: GuessEntry = { player, word, rank, bonuses, ...(streakLen !== undefined && { streak: streakLen }) };
