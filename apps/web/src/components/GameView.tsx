@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useId } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { GameState, GuessEntry } from '@closer/shared';
 
@@ -30,6 +30,43 @@ function rankTheme(rank: number) {
 
 function barWidth(rank: number): number {
   return Math.max(1, Math.round(100 * Math.pow(2, -(rank - 1) / 499)));
+}
+
+function StreakFire({ count }: { count: number }) {
+  const uid = useId().replace(/:/g, '');
+  const ogId = `fgo-${uid}`;
+  const igId = `fgi-${uid}`;
+  return (
+    <span className="streak-badge">
+      <svg className="flame-svg" viewBox="0 0 24 32" width="16" height="22" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <radialGradient id={ogId} cx="50%" cy="85%" r="65%">
+            <stop offset="0%" stopColor="#fef08a" />
+            <stop offset="40%" stopColor="#f97316" />
+            <stop offset="100%" stopColor="#b91c1c" stopOpacity="0.85" />
+          </radialGradient>
+          <radialGradient id={igId} cx="50%" cy="90%" r="55%">
+            <stop offset="0%" stopColor="#ffffff" />
+            <stop offset="55%" stopColor="#fde68a" />
+            <stop offset="100%" stopColor="#fb923c" stopOpacity="0" />
+          </radialGradient>
+        </defs>
+        {/* Outer flame */}
+        <path
+          className="flame-outer"
+          d="M12 2 C9.5 6, 3 11, 3 18.5 C3 24.8, 7 30, 12 30 C17 30, 21 24.8, 21 18.5 C21 11, 14.5 6, 12 2Z"
+          fill={`url(#${ogId})`}
+        />
+        {/* Inner bright core */}
+        <path
+          className="flame-inner"
+          d="M12 10 C10.5 13, 7.5 16, 7.5 20 C7.5 23.5, 9.5 26, 12 26 C14.5 26, 16.5 23.5, 16.5 20 C16.5 16, 13.5 13, 12 10Z"
+          fill={`url(#${igId})`}
+        />
+      </svg>
+      <span className="streak-num">{count}</span>
+    </span>
+  );
 }
 
 function GuessRowContent({
@@ -67,9 +104,7 @@ function GuessRowContent({
           </span>
         ))}
         {isActiveStreak && g.streak !== undefined && (
-          <span className="streak-fire text-base font-bold text-orange-400 gap-0.5">
-            🔥<span className="text-[11px] leading-none">{g.streak}</span>
-          </span>
+          <StreakFire count={g.streak} />
         )}
         <span className={`text-xs font-bold px-2 py-1 rounded-md min-w-[3.5rem] text-center tabular-nums ${theme.badge}`}>
           {g.rank === 1 ? '★ 1' : `# ${g.rank.toLocaleString()}`}
