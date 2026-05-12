@@ -31,7 +31,7 @@ export default function HomePage() {
         <div className="text-center">
           <h1 className="text-7xl font-bold tracking-tight">Proximo</h1>
           <p className="text-slate-400 text-base mt-3 leading-relaxed">
-            Two players. One hidden word. Guess by similarity — lower score wins.
+            Two players. One hidden word. Guess by similarity — higher score wins.
           </p>
         </div>
 
@@ -48,9 +48,9 @@ export default function HomePage() {
         )}
 
         <div className="w-full flex flex-col gap-3">
-          <Hint icon="🎯" text="Guess words. Closer = lower rank." />
+          <Hint icon="🎯" text="Guess words. Closer = lower rank & more points" />
           <Hint icon="⚔️" text="Land the target word to end the round." />
-          <Hint icon="🏆" text="Lowest total score after 3 rounds wins." />
+          <Hint icon="🏆" text="Highest total score after 3 rounds wins." />
         </div>
 
       </div>
