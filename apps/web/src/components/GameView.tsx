@@ -80,6 +80,7 @@ export default function GameView({
 }: Props) {
   const navigate = useNavigate();
   const [input, setInput] = useState('');
+  const [revealingWord, setRevealingWord] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -138,6 +139,13 @@ export default function GameView({
   useEffect(() => {
     if (isMyTurn) inputRef.current?.focus();
   }, [isMyTurn]);
+
+  useEffect(() => {
+    if (state.phase !== 'match-over') return;
+    setRevealingWord(true);
+    const t = setTimeout(() => setRevealingWord(false), 10000);
+    return () => clearTimeout(t);
+  }, [state.phase]);
 
   function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -275,22 +283,33 @@ export default function GameView({
 
           {state.phase === 'match-over' && (
             <>
-              <div className="text-center">
-                <p className="text-xs uppercase tracking-widest text-slate-500 mb-3">Match over</p>
-                <p className="text-6xl mb-3">{state.matchWinner === myRole ? '🏆' : '🥈'}</p>
-                <p className="text-3xl font-bold">
-                  {state.matchWinner === myRole ? 'You win!' : 'Friend wins!'}
-                </p>
-                <p className="text-slate-400 mt-2 text-sm">
-                  {myTotal} vs {theirTotal} — higher score wins
-                </p>
-              </div>
-              <button
-                onClick={() => navigate('/')}
-                className="w-full max-w-xs bg-slate-800 active:bg-slate-700 text-white font-semibold text-base py-4 rounded-2xl transition-colors"
-              >
-                Back to Home
-              </button>
+              {revealingWord ? (
+                <div className="text-center">
+                  <p className="text-xs uppercase tracking-widest text-slate-500 mb-3">The word was</p>
+                  <p className="text-6xl font-bold tracking-tight text-yellow-300 mb-4">
+                    {state.revealedTarget}
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div className="text-center">
+                    <p className="text-xs uppercase tracking-widest text-slate-500 mb-3">Match over</p>
+                    <p className="text-6xl mb-3">{state.matchWinner === myRole ? '🏆' : '🥈'}</p>
+                    <p className="text-3xl font-bold">
+                      {state.matchWinner === myRole ? 'You win!' : 'Friend wins!'}
+                    </p>
+                    <p className="text-slate-400 mt-2 text-sm">
+                      {myTotal} vs {theirTotal} — higher score wins
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => navigate('/')}
+                    className="w-full max-w-xs bg-slate-800 active:bg-slate-700 text-white font-semibold text-base py-4 rounded-2xl transition-colors"
+                  >
+                    Back to Home
+                  </button>
+                </>
+              )}
             </>
           )}
         </div>
