@@ -5,7 +5,8 @@ import {
   STREAK_BONUS_VALUE,
   STEAL_BONUS_VALUE,
 } from '@closer/shared';
-import { getRank, getHintWord } from '../services/embedding-service.js';
+import { getRank } from '../services/embedding-service.js';
+import { generateHint } from '../services/hint-service.js';
 
 
 export function initialGameState(): GameState {
@@ -43,12 +44,11 @@ export async function applyHint(
   state: GameState,
   target: string,
 ): Promise<GameState> {
-  const hintWord = await getHintWord(target, state.guesses.map((g) => g.word));
-  if (!hintWord) return { ...state, hintRequest: null };
+  const hint = await generateHint(target);
   return {
     ...state,
     hintRequest: null,
-    hints: [...state.hints, hintWord],
+    hints: [...state.hints, hint],
   };
 }
 

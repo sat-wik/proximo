@@ -49,21 +49,3 @@ export async function warmCache(target: string): Promise<void> {
   await loadTarget(target);
 }
 
-/** Returns the closest word to `target` (rank > 1) that isn't in `guessedWords`. */
-export async function getHintWord(target: string, guessedWords: string[]): Promise<string | null> {
-  try {
-    const ranks = await loadTarget(target);
-    const guessedSet = new Set(guessedWords);
-    let bestWord: string | null = null;
-    let bestRank = Infinity;
-    for (const [word, rank] of Object.entries(ranks)) {
-      if (rank > 1 && !guessedSet.has(word) && rank < bestRank) {
-        bestRank = rank;
-        bestWord = word;
-      }
-    }
-    return bestWord;
-  } catch {
-    return null;
-  }
-}
