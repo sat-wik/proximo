@@ -304,9 +304,15 @@ export default function GameView({
                     {state.revealedTarget}
                   </p>
                 )}
-                <p className={`text-lg font-medium ${state.roundWinner === myRole ? 'text-emerald-400' : 'text-slate-400'}`}>
-                  {state.roundWinner === myRole ? 'You found it! 🎉' : 'Friend found it.'}
-                </p>
+                {state.guesses.some((g) => g.rank === 1) ? (
+                  <p className={`text-lg font-medium ${state.roundWinner === myRole ? 'text-emerald-400' : 'text-slate-400'}`}>
+                    {state.roundWinner === myRole ? 'You found it! 🎉' : 'Friend found it.'}
+                  </p>
+                ) : (
+                  <p className={`text-lg font-medium ${state.roundWinner === myRole ? 'text-emerald-400' : 'text-slate-400'}`}>
+                    {state.roundWinner === myRole ? 'You won the round.' : 'Friend won the round.'}
+                  </p>
+                )}
               </div>
 
               <div className="w-full max-w-xs bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
