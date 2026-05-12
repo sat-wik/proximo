@@ -48,16 +48,20 @@ export function applyGiveUp(
   scope: 'round' | 'game',
   target: string,
 ): GameState {
-  const winner: 'host' | 'guest' = givingUp === 'host' ? 'guest' : 'host';
+  const roundWinner: 'host' | 'guest' = givingUp === 'host' ? 'guest' : 'host';
   const roundScores = [...state.roundScores, { ...state.scores }];
+  const totHost  = roundScores.reduce((s, r) => s + r.host,  0);
+  const totGuest = roundScores.reduce((s, r) => s + r.guest, 0);
+  const matchWinner: 'host' | 'guest' = totHost >= totGuest ? 'host' : 'guest';
 
   if (scope === 'game') {
     return {
       ...state,
+      scores: { host: 0, guest: 0 },
       phase: 'match-over',
       roundScores,
-      roundWinner: winner,
-      matchWinner: winner,
+      roundWinner,
+      matchWinner,
       revealedTarget: target,
       giveUpRequest: null,
     };
@@ -65,14 +69,13 @@ export function applyGiveUp(
 
   // scope === 'round'
   if (state.round === ROUNDS_PER_MATCH) {
-    const totHost  = roundScores.reduce((s, r) => s + r.host,  0);
-    const totGuest = roundScores.reduce((s, r) => s + r.guest, 0);
     return {
       ...state,
+      scores: { host: 0, guest: 0 },
       phase: 'match-over',
       roundScores,
-      roundWinner: winner,
-      matchWinner: totHost >= totGuest ? 'host' : 'guest',
+      roundWinner,
+      matchWinner,
       revealedTarget: target,
       giveUpRequest: null,
     };
@@ -80,9 +83,10 @@ export function applyGiveUp(
 
   return {
     ...state,
+    scores: { host: 0, guest: 0 },
     phase: 'round-over',
     roundScores,
-    roundWinner: winner,
+    roundWinner,
     revealedTarget: target,
     giveUpRequest: null,
   };
