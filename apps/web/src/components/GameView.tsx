@@ -282,8 +282,82 @@ export default function GameView({
         </div>
       </header>
 
+      {/* ── Input area (top, so keyboard doesn't cover it on mobile) ── */}
+      {state.phase === 'playing' && (
+        <div className="flex-none border-b border-slate-800 bg-slate-950 px-4 pt-3 pb-3">
+          {guessError && (
+            <p className="text-red-400 text-sm text-center mb-2">{guessError}</p>
+          )}
+
+          {state.hintRequest === null && state.giveUpRequest === null && (
+            <div className="flex justify-between items-center mb-2">
+              {state.guesses.length >= 50 ? (
+                <button
+                  onClick={onRequestHint}
+                  className="text-xs font-medium px-3 py-1.5 rounded-lg bg-slate-800 active:bg-slate-700 text-purple-300 border border-purple-800/50 transition-colors"
+                >
+                  💡 Request Hint
+                </button>
+              ) : (
+                <span />
+              )}
+              <button
+                onClick={() => setGiveUpModal(true)}
+                className="text-xs font-medium px-3 py-1.5 rounded-lg bg-red-950/60 active:bg-red-900/60 border border-red-800/50 text-red-400 transition-colors"
+              >
+                Give Up
+              </button>
+            </div>
+          )}
+
+          {state.hintRequest === myRole && (
+            <div className="flex items-center justify-between mb-2 px-1">
+              <p className="text-xs text-purple-400">Hint requested — waiting for friend…</p>
+            </div>
+          )}
+
+          {myGiveUpRequest && (
+            <div className="flex items-center justify-between mb-2 px-1">
+              <p className="text-xs text-orange-400">
+                Waiting for friend to accept give up ({myGiveUpRequest.scope})…
+              </p>
+            </div>
+          )}
+
+          {isMyTurn ? (
+            <form onSubmit={handleSubmit} className="flex gap-2">
+              <input
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="Type a word…"
+                disabled={pendingGuess}
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="none"
+                spellCheck={false}
+                enterKeyHint="go"
+                className="flex-1 bg-slate-800 border border-slate-700 text-white placeholder-slate-500 rounded-xl px-4 py-3 text-base focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+              />
+              <button
+                type="submit"
+                disabled={!input.trim() || pendingGuess}
+                className="bg-emerald-600 active:bg-emerald-700 disabled:opacity-40 text-white font-bold text-base px-5 py-3 rounded-xl transition-colors min-w-[56px]"
+              >
+                {pendingGuess ? '…' : 'Go'}
+              </button>
+            </form>
+          ) : (
+            <div className="flex items-center justify-center gap-2 py-3">
+              <span className="w-2 h-2 rounded-full bg-slate-600 animate-pulse" />
+              <p className="text-slate-500 text-sm">Friend is thinking…</p>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── Guess list ── */}
-      <main ref={listRef} className="flex-1 overflow-y-auto">
+      <main ref={listRef} className="flex-1 overflow-y-auto" style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
         {state.guesses.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-2 px-8 text-center">
             <p className="text-4xl">🔍</p>
@@ -546,86 +620,6 @@ export default function GameView({
         </div>
       )}
 
-      {/* ── Input footer ── */}
-      <footer
-        className="flex-none border-t border-slate-800 bg-slate-950 px-4 pt-3"
-        style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}
-      >
-        {guessError && (
-          <p className="text-red-400 text-sm text-center mb-2">{guessError}</p>
-        )}
-
-        {state.phase === 'playing' && (
-          <>
-            {/* ── Hint controls ── */}
-            {state.hintRequest === null && state.giveUpRequest === null && (
-              <div className="flex justify-between items-center mb-2">
-                {state.guesses.length >= 50 ? (
-                  <button
-                    onClick={onRequestHint}
-                    className="text-xs font-medium px-3 py-1.5 rounded-lg bg-slate-800 active:bg-slate-700 text-purple-300 border border-purple-800/50 transition-colors"
-                  >
-                    💡 Request Hint
-                  </button>
-                ) : (
-                  <span />
-                )}
-                <button
-                  onClick={() => setGiveUpModal(true)}
-                  className="text-xs font-medium px-3 py-1.5 rounded-lg bg-red-950/60 active:bg-red-900/60 border border-red-800/50 text-red-400 transition-colors"
-                >
-                  Give Up
-                </button>
-              </div>
-            )}
-
-            {state.hintRequest === myRole && (
-              <div className="flex items-center justify-between mb-2 px-1">
-                <p className="text-xs text-purple-400">Hint requested — waiting for friend…</p>
-              </div>
-            )}
-            {/* ── Give-up pending (my request) ── */}
-            {myGiveUpRequest && (
-              <div className="flex items-center justify-between mb-2 px-1">
-                <p className="text-xs text-orange-400">
-                  Waiting for friend to accept give up ({myGiveUpRequest.scope})…
-                </p>
-              </div>
-            )}
-
-            {/* ── Guess input ── */}
-            {isMyTurn ? (
-              <form onSubmit={handleSubmit} className="flex gap-2">
-                <input
-                  ref={inputRef}
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  placeholder="Type a word…"
-                  disabled={pendingGuess}
-                  autoComplete="off"
-                  autoCorrect="off"
-                  autoCapitalize="none"
-                  spellCheck={false}
-                  enterKeyHint="go"
-                  className="flex-1 bg-slate-800 border border-slate-700 text-white placeholder-slate-500 rounded-xl px-4 py-3 text-base focus:outline-none focus:border-emerald-500 disabled:opacity-50"
-                />
-                <button
-                  type="submit"
-                  disabled={!input.trim() || pendingGuess}
-                  className="bg-emerald-600 active:bg-emerald-700 disabled:opacity-40 text-white font-bold text-base px-5 py-3 rounded-xl transition-colors min-w-[56px]"
-                >
-                  {pendingGuess ? '…' : 'Go'}
-                </button>
-              </form>
-            ) : (
-              <div className="flex items-center justify-center gap-2 py-3">
-                <span className="w-2 h-2 rounded-full bg-slate-600 animate-pulse" />
-                <p className="text-slate-500 text-sm">Friend is thinking…</p>
-              </div>
-            )}
-          </>
-        )}
-      </footer>
     </div>
   );
 }
