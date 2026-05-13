@@ -422,7 +422,7 @@ export default function GameView({
                 <p className="text-xs uppercase tracking-widest text-slate-500 mb-3">
                   Round {state.round} complete
                 </p>
-                {state.revealedTarget && (
+                {state.revealedTarget && state.roundEndReason === 'kill' && (
                   <p className="text-5xl font-bold tracking-tight text-yellow-300 mb-2">
                     {state.revealedTarget}
                   </p>
@@ -472,7 +472,7 @@ export default function GameView({
 
           {state.phase === 'match-over' && (
             <>
-              {revealingWord ? (
+              {revealingWord && state.roundEndReason === 'kill' ? (
                 <div className="text-center">
                   <p className="text-xs uppercase tracking-widest text-slate-500 mb-3">The word was</p>
                   <p className="text-6xl font-bold tracking-tight text-yellow-300 mb-4">
