@@ -178,6 +178,8 @@ export default function GameView({
   const [showRules, setShowRules] = useState(false);
   const [resultCopied, setResultCopied] = useState(false);
   const [playAgain, setPlayAgain] = useState<'idle' | 'loading' | 'error'>('idle');
+  const [roundIntro, setRoundIntro] = useState<number | null>(null);
+  const prevRoundRef = useRef(state.round);
   const [notification, setNotification] = useState<'hint-accepted' | 'hint-rejected' | 'giveup-accepted' | 'giveup-rejected' | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -204,6 +206,11 @@ export default function GameView({
 
   const newestGuess = state.guesses.length > 0 ? state.guesses[state.guesses.length - 1] : null;
   const sortedGuesses = [...state.guesses].sort((a, b) => a.rank - b.rank);
+
+  const myBestRankRaw = state.guesses
+    .filter((g) => g.player === myRole)
+    .reduce((min, g) => Math.min(min, g.rank), Infinity);
+  const myBestRank = Number.isFinite(myBestRankRaw) ? myBestRankRaw : null;
 
   // Words that are part of an unbroken steal streak right now (per player)
   const activeStreakWords = new Set<string>();
@@ -260,6 +267,16 @@ export default function GameView({
     const t = setTimeout(() => setRevealingWord(false), 5000);
     return () => clearTimeout(t);
   }, [state.phase]);
+
+  // Brief interstitial when a new round begins (not on mount/reconnect)
+  useEffect(() => {
+    const isNewRound = state.round > prevRoundRef.current && state.phase === 'playing';
+    prevRoundRef.current = state.round;
+    if (!isNewRound) return;
+    setRoundIntro(state.round);
+    const t = setTimeout(() => setRoundIntro(null), 1600);
+    return () => clearTimeout(t);
+  }, [state.round, state.phase]);
 
   // Detect hint accepted / rejected
   useEffect(() => {
@@ -355,13 +372,23 @@ export default function GameView({
 
       {/* ── Header ── */}
       <header className="flex-none border-b border-slate-800 px-4 py-3">
-        <div className="flex items-center justify-between">
+        <div className="relative flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <ScoreChip label="You" score={myTotal} highlight />
-            <ScoreChip label={state.vsBot ? 'CloserBot' : 'Friend'} score={theirTotal} />
+            <ScoreChip
+              label="You"
+              score={myTotal}
+              highlight
+              active={state.phase === 'playing' && state.currentTurn === myRole}
+            />
+            <ScoreChip
+              label={state.vsBot ? 'CloserBot' : 'Friend'}
+              score={theirTotal}
+              active={state.phase === 'playing' && state.currentTurn !== myRole}
+            />
           </div>
 
-          <div className="flex flex-col items-center">
+          {/* Absolutely centered so the uneven side widths can't pull it off-center */}
+          <div className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center">
             <span className="text-[10px] uppercase tracking-widest text-slate-500">Round</span>
             <span className="text-sm font-bold text-white leading-tight">
               {state.round} / 3
@@ -399,14 +426,27 @@ export default function GameView({
             <p className="text-red-400 text-sm text-center mb-2">{guessError}</p>
           )}
 
-          {state.hintRequest === null && state.giveUpRequest === null && state.guesses.length >= 50 && (
+          {state.hintRequest === null && state.giveUpRequest === null &&
+            (state.guesses.length >= 50 || myBestRank !== null) && (
             <div className="flex justify-between items-center mb-2">
-              <button
-                onClick={onRequestHint}
-                className="text-xs font-medium px-3 py-1.5 rounded-lg bg-slate-800 active:bg-slate-700 text-purple-300 border border-purple-800/50 transition-colors"
-              >
-                💡 Request Hint
-              </button>
+              {state.guesses.length >= 50 ? (
+                <button
+                  onClick={onRequestHint}
+                  className="text-xs font-medium px-3 py-1.5 rounded-lg bg-slate-800 active:bg-slate-700 text-purple-300 border border-purple-800/50 transition-colors"
+                >
+                  💡 Request Hint
+                </button>
+              ) : (
+                <span />
+              )}
+              {myBestRank !== null && (
+                <span className="text-xs text-slate-500 flex items-center gap-1.5">
+                  Your best
+                  <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded tabular-nums ${rankTheme(myBestRank).badge}`}>
+                    #{myBestRank.toLocaleString()}
+                  </span>
+                </span>
+              )}
             </div>
           )}
 
@@ -513,6 +553,17 @@ export default function GameView({
         )}
       </main>
 
+      {/* ── Round-start interstitial ── */}
+      {roundIntro !== null && state.phase === 'playing' && (
+        <div className="absolute inset-0 z-20 bg-slate-950/95 flex flex-col items-center justify-center gap-3 px-6">
+          <p className="text-xs uppercase tracking-widest text-slate-500">New word incoming</p>
+          <p className="text-5xl font-bold tracking-tight">Round {roundIntro}</p>
+          <p className="text-slate-400 text-base">
+            {state.currentTurn === myRole ? 'You go first.' : `${opponentName} goes first.`}
+          </p>
+        </div>
+      )}
+
       {/* ── Round-over / match-over overlay ── */}
       {state.phase !== 'playing' && (
         <div className="absolute inset-0 z-20 bg-slate-950/95 flex flex-col items-center justify-center gap-5 px-6 py-8 overflow-y-auto">
@@ -579,11 +630,15 @@ export default function GameView({
           {state.phase === 'match-over' && (
             <>
               {revealingWord && state.roundEndReason === 'kill' ? (
-                <div className="text-center">
+                <div
+                  className="absolute inset-0 flex flex-col items-center justify-center text-center cursor-pointer"
+                  onClick={() => setRevealingWord(false)}
+                >
                   <p className="text-xs uppercase tracking-widest text-slate-500 mb-3">The word was</p>
                   <p className="text-6xl font-bold tracking-tight text-yellow-300 mb-4">
                     {state.revealedTarget}
                   </p>
+                  <p className="text-slate-600 text-xs mt-6">tap anywhere to continue</p>
                 </div>
               ) : (
                 <>
@@ -600,19 +655,6 @@ export default function GameView({
 
                   {state.nearMisses && state.nearMisses.length > 0 && (
                     <NearMisses words={state.nearMisses} guessed={guessedWords} />
-                  )}
-
-                  {shareLines.length > 0 && (
-                    <div className="w-full max-w-xs bg-slate-900 border border-slate-800 rounded-2xl px-4 py-3">
-                      <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-2 text-center">
-                        Your match
-                      </p>
-                      {shareLines.map((line) => (
-                        <p key={line} className="text-sm tracking-wide leading-6 text-slate-300">
-                          {line}
-                        </p>
-                      ))}
-                    </div>
                   )}
 
                   <div className="w-full max-w-xs flex flex-col gap-2">
@@ -772,9 +814,13 @@ export default function GameView({
   );
 }
 
-function ScoreChip({ label, score, highlight }: { label: string; score: number; highlight?: boolean }) {
+function ScoreChip({ label, score, highlight, active }: { label: string; score: number; highlight?: boolean; active?: boolean }) {
   return (
-    <div className="text-center">
+    <div
+      className={`text-center px-2 py-0.5 rounded-lg border transition-colors ${
+        active ? 'border-emerald-600/60 bg-emerald-950/30' : 'border-transparent'
+      }`}
+    >
       <p className={`text-[10px] uppercase tracking-widest mb-0.5 ${highlight ? 'text-emerald-500' : 'text-slate-500'}`}>
         {label}
       </p>

@@ -102,7 +102,7 @@ export async function applyHint(
   state: GameState,
   target: string,
 ): Promise<GameState> {
-  const hint = await generateHint(target);
+  const hint = await generateHint(target, state.hints);
   return {
     ...state,
     hintRequest: null,

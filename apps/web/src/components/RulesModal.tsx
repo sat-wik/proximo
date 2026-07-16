@@ -30,6 +30,18 @@ export default function RulesModal({ onClose }: Props) {
             <span className="text-white font-medium">Highest total score wins.</span>
           </Rule>
 
+          <div>
+            <p className="text-white font-semibold mb-2">Reading the colors</p>
+            <div className="flex flex-col gap-1.5">
+              <LegendRow color="bg-yellow-400" label="#1 — the target word" />
+              <LegendRow color="bg-emerald-500" label="#2–100 — burning hot" />
+              <LegendRow color="bg-teal-400" label="#101–500 — very close" />
+              <LegendRow color="bg-yellow-500" label="#501–1,500 — warm" />
+              <LegendRow color="bg-orange-500" label="#1,501–5,000 — lukewarm" />
+              <LegendRow color="bg-slate-600" label="#5,001+ — cold" />
+            </div>
+          </div>
+
           <Rule title="Steals & streaks 🔥">
             Beat the best rank on the board and you <em>steal</em> the lead for a{' '}
             <span className="text-white font-medium">+500 bonus</span>. Steal on consecutive
@@ -69,6 +81,15 @@ export default function RulesModal({ onClose }: Props) {
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function LegendRow({ color, label }: { color: string; label: string }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <span className={`w-3.5 h-3.5 rounded flex-none ${color}`} />
+      <span className="text-slate-400 text-xs">{label}</span>
     </div>
   );
 }
