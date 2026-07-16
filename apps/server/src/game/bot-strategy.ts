@@ -24,7 +24,16 @@ const PLATEAU_FACTOR_MIN = 0.85;
 const PLATEAU_FACTOR_MAX = 1.6;
 const CONVERGE_FACTOR_MIN = 0.55;
 const CONVERGE_FACTOR_MAX = 0.85;
+const PIGGYBACK_CHANCE = 0.35; // riff off the human's best word when they lead
+const PIGGYBACK_FACTOR_MIN = 0.7;
+const PIGGYBACK_FACTOR_MAX = 1.3;
+const PIGGYBACK_ANCHOR_MIN = 30; // never piggyback straight into sniping range
 const MAX_RANK = 19999;
+
+const THINK_OPENING_FACTOR = 0.6; // early guesses are low-effort
+const THINK_ENDGAME_FACTOR = 1.35; // closing in takes focus
+const LONG_THINK_CHANCE = 0.12; // occasionally stare at the ceiling
+const LONG_THINK_FACTOR = 2.2;
 
 export interface BotRoundState {
   bestRank: number; // Infinity at round start
@@ -40,8 +49,13 @@ function uniform(rng: () => number, min: number, max: number): number {
   return min + rng() * (max - min);
 }
 
-/** Returns the rank the bot aims for this turn. 1 = go for the kill. */
-export function chooseTargetRank(s: BotRoundState, rng: () => number): number {
+/**
+ * Returns the rank the bot aims for this turn. 1 = go for the kill.
+ * `boardBestRank` is the best rank on the board across BOTH players
+ * (Infinity if no guesses yet) — when the human holds it, the bot
+ * sometimes riffs off their word like a real opponent would.
+ */
+export function chooseTargetRank(s: BotRoundState, boardBestRank: number, rng: () => number): number {
   if (s.turnIndex >= s.killTurn + KILL_TURN_GRACE) return 1;
 
   const floor = Math.max(2, Math.round(FLOOR_BASE * FLOOR_DECAY ** s.turnIndex));
@@ -52,6 +66,15 @@ export function chooseTargetRank(s: BotRoundState, rng: () => number): number {
     if (s.bestRank <= KILL_READY_RANK && rng() < KILL_CHANCE) return 1;
     const desired = Math.round(s.bestRank * uniform(rng, CLOSING_FACTOR_MIN, CLOSING_FACTOR_MAX));
     return Math.min(MAX_RANK, Math.max(2, Math.max(desired, floor)));
+  }
+
+  // Piggyback: the human found something closer than anything of ours —
+  // guess near their rank. Skips the early-game floor deliberately: the
+  // human led the way there, so it doesn't read as superhuman.
+  if (boardBestRank < s.bestRank && s.turnIndex > 0 && rng() < PIGGYBACK_CHANCE) {
+    const anchor = Math.max(boardBestRank, PIGGYBACK_ANCHOR_MIN);
+    const desired = Math.round(anchor * uniform(rng, PIGGYBACK_FACTOR_MIN, PIGGYBACK_FACTOR_MAX));
+    return Math.min(MAX_RANK, Math.max(2, desired));
   }
 
   let desired: number;
@@ -69,6 +92,18 @@ export function chooseTargetRank(s: BotRoundState, rng: () => number): number {
   }
 
   return Math.min(MAX_RANK, Math.max(2, Math.max(desired, floor)));
+}
+
+/**
+ * Human-feeling thinking time: quick openings, slower endgame focus, and
+ * the occasional long stare at the ceiling.
+ */
+export function pickThinkDelayMs(s: BotRoundState, minMs: number, maxMs: number, rng: () => number): number {
+  let factor = 1;
+  if (s.turnIndex <= 1) factor = THINK_OPENING_FACTOR;
+  else if (s.turnIndex >= s.killTurn) factor = THINK_ENDGAME_FACTOR;
+  if (rng() < LONG_THINK_CHANCE) factor *= LONG_THINK_FACTOR;
+  return Math.round(uniform(rng, minMs, maxMs) * factor);
 }
 
 /**

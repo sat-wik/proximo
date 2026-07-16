@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useLayoutEffect, useId } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { GameState, GuessEntry } from '@closer/shared';
+import RulesModal from './RulesModal';
 
 export type { GameState, GuessEntry };
 
@@ -132,6 +133,7 @@ export default function GameView({
   const [input, setInput] = useState('');
   const [revealingWord, setRevealingWord] = useState(false);
   const [giveUpModal, setGiveUpModal] = useState(false);
+  const [showRules, setShowRules] = useState(false);
   const [notification, setNotification] = useState<'hint-accepted' | 'hint-rejected' | 'giveup-accepted' | 'giveup-rejected' | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -265,7 +267,7 @@ export default function GameView({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <ScoreChip label="You" score={myTotal} highlight />
-            <ScoreChip label={state.vsBot ? '🤖 CloserBot' : 'Friend'} score={theirTotal} />
+            <ScoreChip label={state.vsBot ? 'CloserBot' : 'Friend'} score={theirTotal} />
           </div>
 
           <div className="flex flex-col items-center">
@@ -275,10 +277,17 @@ export default function GameView({
             </span>
           </div>
 
-          <div className="w-24 text-right">
+          <div className="w-24 flex items-center justify-end gap-2">
             <span className="text-xs text-slate-600">
               {state.guesses.length} guess{state.guesses.length !== 1 ? 'es' : ''}
             </span>
+            <button
+              onClick={() => setShowRules(true)}
+              aria-label="How to play"
+              className="w-7 h-7 flex-none rounded-full bg-slate-900 border border-slate-700 text-slate-500 active:bg-slate-800 text-sm font-bold transition-colors"
+            >
+              ?
+            </button>
           </div>
         </div>
       </header>
@@ -504,6 +513,8 @@ export default function GameView({
           )}
         </div>
       )}
+
+      {showRules && <RulesModal onClose={() => setShowRules(false)} />}
 
       {/* ── Accept / Reject notification ── */}
       {notification && (

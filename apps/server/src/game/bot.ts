@@ -3,7 +3,7 @@ import { getSession, touchSession } from '../session-store.js';
 import { getRandomTarget } from '../services/target-service.js';
 import { getWordsByRank } from '../services/embedding-service.js';
 import { applyGuess, applyGiveUp, applyHint, initialGameState } from './engine.js';
-import { chooseTargetRank, pickWordAtRank, rollKillTurn, type BotRoundState } from './bot-strategy.js';
+import { chooseTargetRank, pickThinkDelayMs, pickWordAtRank, rollKillTurn, type BotRoundState } from './bot-strategy.js';
 
 const GUESS_DELAY_MIN_MS = Number(process.env.BOT_DELAY_MIN_MS) || 2500;
 const GUESS_DELAY_MAX_MS = Number(process.env.BOT_DELAY_MAX_MS) || 6000;
@@ -45,11 +45,12 @@ async function makeGuess(session: Session): Promise<void> {
 
   const byRank = await getWordsByRank(target);
   const guessed = new Set(state.guesses.map((g) => g.word));
+  const boardBestRank = state.guesses.reduce((min, g) => Math.min(min, g.rank), Infinity);
 
   // The engine should never reject a word drawn from its own rank table,
   // but if it does, exclude it and try once more.
   for (let attempt = 0; attempt < 2; attempt++) {
-    const desired = chooseTargetRank(bot, Math.random);
+    const desired = chooseTargetRank(bot, boardBestRank, Math.random);
     const word = pickWordAtRank(byRank, guessed, desired);
     if (!word) return;
 
@@ -115,7 +116,7 @@ export function maybeBotAct(session: Session): void {
   }
 
   if (state.phase === 'playing' && state.currentTurn === 'guest') {
-    const delay = GUESS_DELAY_MIN_MS + Math.random() * (GUESS_DELAY_MAX_MS - GUESS_DELAY_MIN_MS);
+    const delay = pickThinkDelayMs(bot, GUESS_DELAY_MIN_MS, GUESS_DELAY_MAX_MS, Math.random);
     schedule(session, delay, () => makeGuess(session));
   }
 }

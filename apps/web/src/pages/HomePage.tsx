@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import RulesModal from '../components/RulesModal';
 
 export default function HomePage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState<'quick' | 'friend' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showRules, setShowRules] = useState(false);
 
   async function quickMatch() {
     setLoading('quick');
@@ -38,9 +40,19 @@ export default function HomePage() {
 
   return (
     <div
-      className="bg-slate-950 text-white flex flex-col items-center justify-center px-6"
+      className="relative bg-slate-950 text-white flex flex-col items-center justify-center px-6"
       style={{ minHeight: '100dvh' }}
     >
+      <button
+        onClick={() => setShowRules(true)}
+        aria-label="How to play"
+        className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-900 border border-slate-700 text-slate-400 active:bg-slate-800 text-base font-bold transition-colors"
+      >
+        ?
+      </button>
+
+      {showRules && <RulesModal onClose={() => setShowRules(false)} />}
+
       <div className="w-full max-w-sm flex flex-col items-center gap-10">
 
         <div className="text-center">
