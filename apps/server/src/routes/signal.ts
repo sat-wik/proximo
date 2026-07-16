@@ -1,8 +1,15 @@
 import type { WebSocket } from 'ws';
 import { z } from 'zod';
+import type { Session } from '../session-store.js';
 import { getSession, touchSession } from '../session-store.js';
 import { getRandomTarget } from '../services/target-service.js';
 import { applyGuess, applyGiveUp, applyHint, initialGameState, nextRoundState } from '../game/engine.js';
+import { maybeBotAct } from '../game/bot.js';
+import { onSocketClosed } from '../matchmaking.js';
+
+const MAX_HINTS_PER_ROUND = 3;
+const WS_RATE_WINDOW_MS = 10_000;
+const WS_RATE_MAX_MESSAGES = 40;
 
 const ClientMessage = z.discriminatedUnion('type', [
   z.object({ type: z.literal('join'), sessionId: z.string() }),
@@ -27,11 +34,29 @@ function broadcast(session: { host: WebSocket | null; guest: WebSocket | null },
   if (session.guest) send(session.guest, msg);
 }
 
+function commit(session: Session): void {
+  touchSession(session.id);
+  broadcast(session, { type: 'game-state', state: session.gameState });
+  maybeBotAct(session);
+}
+
 export function handleSignaling(socket: WebSocket): void {
   let sessionId: string | null = null;
   let role: 'host' | 'guest' | null = null;
+  let windowStart = Date.now();
+  let windowCount = 0;
 
   socket.on('message', async (raw: Buffer) => {
+    const now = Date.now();
+    if (now - windowStart > WS_RATE_WINDOW_MS) {
+      windowStart = now;
+      windowCount = 0;
+    }
+    if (++windowCount > WS_RATE_MAX_MESSAGES) {
+      socket.close();
+      return;
+    }
+
     let parsed: unknown;
     try {
       parsed = JSON.parse(raw.toString());
@@ -59,7 +84,8 @@ export function handleSignaling(socket: WebSocket): void {
       const hostLive  = session.host  !== null && session.host.readyState  === 1;
       const guestLive = session.guest !== null && session.guest.readyState === 1;
 
-      if (hostLive && guestLive) {
+      // The bot holds the guest seat; only the (rejoining) human may enter
+      if ((hostLive && guestLive) || (session.bot && hostLive)) {
         send(socket, { type: 'error', message: 'Session full' });
         return;
       }
@@ -79,6 +105,7 @@ export function handleSignaling(socket: WebSocket): void {
       // If game already exists (reconnect), send current state to the rejoining player
       if (session.gameState) {
         send(socket, { type: 'game-state', state: session.gameState });
+        maybeBotAct(session); // resume a bot paused by the host's disconnect
         return;
       }
 
@@ -86,8 +113,7 @@ export function handleSignaling(socket: WebSocket): void {
       if (session.host?.readyState === 1 && session.guest?.readyState === 1) {
         session.targetWord = await getRandomTarget();
         session.gameState = initialGameState();
-        touchSession(sessionId);
-        broadcast(session, { type: 'game-state', state: session.gameState });
+        commit(session);
       }
       return;
     }
@@ -114,8 +140,7 @@ export function handleSignaling(socket: WebSocket): void {
       }
 
       session.gameState = state;
-      touchSession(sessionId);
-      broadcast(session, { type: 'game-state', state });
+      commit(session);
       return;
     }
 
@@ -127,8 +152,7 @@ export function handleSignaling(socket: WebSocket): void {
 
       session.targetWord = await getRandomTarget(session.targetWord ? [session.targetWord] : []);
       session.gameState = nextRoundState(session.gameState);
-      touchSession(sessionId);
-      broadcast(session, { type: 'game-state', state: session.gameState });
+      commit(session);
     }
 
     // ── request-hint ──────────────────────────────────────────────────────
@@ -138,10 +162,10 @@ export function handleSignaling(socket: WebSocket): void {
       if (!session?.gameState || session.gameState.phase !== 'playing') return;
       // Only one pending request at a time; can't request if you already did
       if (session.gameState.hintRequest !== null) return;
+      if (session.gameState.hints.length >= MAX_HINTS_PER_ROUND) return;
 
       session.gameState = { ...session.gameState, hintRequest: role };
-      touchSession(sessionId);
-      broadcast(session, { type: 'game-state', state: session.gameState });
+      commit(session);
     }
 
     // ── accept-hint ───────────────────────────────────────────────────────
@@ -152,8 +176,7 @@ export function handleSignaling(socket: WebSocket): void {
       if (session.gameState.hintRequest === null || session.gameState.hintRequest === role) return;
 
       session.gameState = await applyHint(session.gameState, session.targetWord);
-      touchSession(sessionId);
-      broadcast(session, { type: 'game-state', state: session.gameState });
+      commit(session);
     }
 
     // ── reject-hint ───────────────────────────────────────────────────────
@@ -164,8 +187,7 @@ export function handleSignaling(socket: WebSocket): void {
       if (session.gameState.hintRequest === null || session.gameState.hintRequest === role) return;
 
       session.gameState = { ...session.gameState, hintRequest: null };
-      touchSession(sessionId);
-      broadcast(session, { type: 'game-state', state: session.gameState });
+      commit(session);
     }
 
     // ── give-up ───────────────────────────────────────────────────────────
@@ -189,8 +211,7 @@ export function handleSignaling(socket: WebSocket): void {
         // Not leading — give up directly
         session.gameState = applyGiveUp(gs, role, msg.scope, session.targetWord);
       }
-      touchSession(sessionId);
-      broadcast(session, { type: 'game-state', state: session.gameState });
+      commit(session);
     }
 
     // ── accept-give-up ────────────────────────────────────────────────────
@@ -202,8 +223,7 @@ export function handleSignaling(socket: WebSocket): void {
       if (!req || req.player === role) return; // only other player can accept
 
       session.gameState = applyGiveUp(session.gameState, req.player, req.scope, session.targetWord);
-      touchSession(sessionId);
-      broadcast(session, { type: 'game-state', state: session.gameState });
+      commit(session);
     }
 
     // ── reject-give-up ────────────────────────────────────────────────────
@@ -215,8 +235,7 @@ export function handleSignaling(socket: WebSocket): void {
       if (!req || req.player === role) return;
 
       session.gameState = { ...session.gameState, giveUpRequest: null };
-      touchSession(sessionId);
-      broadcast(session, { type: 'game-state', state: session.gameState });
+      commit(session);
     }
   });
 
@@ -226,5 +245,6 @@ export function handleSignaling(socket: WebSocket): void {
     if (!session) return;
     if (role === 'host') session.host = null;
     else session.guest = null;
+    onSocketClosed(session);
   });
 }

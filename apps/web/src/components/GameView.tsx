@@ -142,6 +142,7 @@ export default function GameView({
   const prevGiveUpReqRef = useRef(state.giveUpRequest);
 
   const isMyTurn = state.currentTurn === myRole && state.phase === 'playing';
+  const opponentName = state.vsBot ? 'CloserBot' : 'Friend';
 
   const totalScores = {
     host:  state.roundScores.reduce((s, r) => s + r.host,  0) + state.scores.host,
@@ -264,7 +265,7 @@ export default function GameView({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <ScoreChip label="You" score={myTotal} highlight />
-            <ScoreChip label="Friend" score={theirTotal} />
+            <ScoreChip label={state.vsBot ? '🤖 CloserBot' : 'Friend'} score={theirTotal} />
           </div>
 
           <div className="flex flex-col items-center">
@@ -312,14 +313,14 @@ export default function GameView({
 
           {state.hintRequest === myRole && (
             <div className="flex items-center justify-between mb-2 px-1">
-              <p className="text-xs text-purple-400">Hint requested — waiting for friend…</p>
+              <p className="text-xs text-purple-400">Hint requested — waiting for {opponentName}…</p>
             </div>
           )}
 
           {myGiveUpRequest && (
             <div className="flex items-center justify-between mb-2 px-1">
               <p className="text-xs text-orange-400">
-                Waiting for friend to accept give up ({myGiveUpRequest.scope})…
+                Waiting for {opponentName} to accept give up ({myGiveUpRequest.scope})…
               </p>
             </div>
           )}
@@ -350,7 +351,7 @@ export default function GameView({
           ) : (
             <div className="flex items-center justify-center gap-2 py-3">
               <span className="w-2 h-2 rounded-full bg-slate-600 animate-pulse" />
-              <p className="text-slate-500 text-sm">Friend is thinking…</p>
+              <p className="text-slate-500 text-sm">{opponentName} is thinking…</p>
             </div>
           )}
         </div>
@@ -362,7 +363,7 @@ export default function GameView({
           <div className="flex flex-col items-center justify-center h-full gap-2 px-8 text-center">
             <p className="text-4xl">🔍</p>
             <p className="text-slate-400 text-base">
-              {isMyTurn ? 'You go first — type a word below.' : 'Waiting for friend…'}
+              {isMyTurn ? 'You go first — type a word below.' : `Waiting for ${opponentName}…`}
             </p>
           </div>
         ) : (
@@ -429,7 +430,7 @@ export default function GameView({
                 )}
                 {state.roundEndReason === 'kill' && (
                   <p className={`text-lg font-medium ${state.roundWinner === myRole ? 'text-emerald-400' : 'text-slate-400'}`}>
-                    {state.roundWinner === myRole ? 'You found it! 🎉' : 'Friend found it.'}
+                    {state.roundWinner === myRole ? 'You found it! 🎉' : `${opponentName} found it.`}
                   </p>
                 )}
               </div>
@@ -441,7 +442,7 @@ export default function GameView({
                     <p className="text-2xl font-bold">{myLastRound}</p>
                   </div>
                   <div className="flex-1 text-center py-4">
-                    <p className="text-xs text-slate-500 mb-1">Friend</p>
+                    <p className="text-xs text-slate-500 mb-1">{opponentName}</p>
                     <p className="text-2xl font-bold text-slate-300">{theirLastRound}</p>
                   </div>
                 </div>
@@ -485,7 +486,7 @@ export default function GameView({
                     <p className="text-xs uppercase tracking-widest text-slate-500 mb-3">Match over</p>
                     <p className="text-6xl mb-3">{state.matchWinner === myRole ? '🏆' : '🥈'}</p>
                     <p className="text-3xl font-bold">
-                      {state.matchWinner === myRole ? 'You win!' : 'Friend wins!'}
+                      {state.matchWinner === myRole ? 'You win!' : `${opponentName} wins!`}
                     </p>
                     <p className="text-slate-400 mt-2 text-sm">
                       {myTotal} vs {theirTotal} — higher score wins
@@ -516,7 +517,7 @@ export default function GameView({
               </div>
             )}
             <p className="text-white font-semibold text-sm text-center">
-              {notification.includes('rejected') ? 'Friend rejected your request.' : 'Your friend accepted!'}
+              {notification.includes('rejected') ? `${opponentName} rejected your request.` : `${opponentName} accepted!`}
             </p>
           </div>
         </div>
@@ -592,7 +593,7 @@ export default function GameView({
               <p className="text-white font-semibold text-base text-center">Give Up</p>
               <p className="text-slate-400 text-sm text-center mt-1">
                 {isLeading
-                  ? 'You\'re in the lead — your friend must agree.'
+                  ? `You're in the lead — ${opponentName} must agree.`
                   : 'What would you like to give up?'}
               </p>
             </div>

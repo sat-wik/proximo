@@ -24,6 +24,7 @@ export interface GameState {
   hints: string[];
   giveUpRequest: { player: 'host' | 'guest'; scope: 'round' | 'game' } | null;
   roundEndReason: 'kill' | 'give-up' | null;
+  vsBot?: boolean; // guest seat is the server bot
 }
 
 export type GameMode = 'duel' | 'cooperative' | 'subversion';

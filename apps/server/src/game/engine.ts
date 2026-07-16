@@ -40,6 +40,7 @@ export function nextRoundState(current: GameState): GameState {
     hints: [],
     giveUpRequest: null,
     roundEndReason: null,
+    vsBot: current.vsBot,
   };
 }
 

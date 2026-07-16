@@ -11,6 +11,7 @@ packages/embeddings/.venv/
 
 # Vite
 apps/web/dist/
+apps/web/tsconfig.tsbuildinfo
 
 # Embeddings — large precomputed files, committed separately
 data/ranks/

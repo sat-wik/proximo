@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import GameView from '../components/GameView';
 import type { GameState } from '@closer/shared';
 
@@ -14,8 +14,16 @@ type ServerMsg =
 export default function LobbyPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  // ?quick=<botDelayMs> marks a quick-match session: show the searching UI
+  // instead of the share link while waiting for an opponent
+  const quickParam = searchParams.get('quick');
+  const isQuickMatch = quickParam !== null;
+  const botDelayMs = Number(quickParam) || 20_000;
 
   const [lobbyState, setLobbyState] = useState<LobbyState>('connecting');
+  const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
   const [role, setRole] = useState<'host' | 'guest' | null>(null);
   const [copied, setCopied] = useState(false);
   const [gameState, setGameState] = useState<GameState | null>(null);
@@ -127,6 +135,17 @@ export default function LobbyPage() {
     return () => { closedByUs = true; ws.close(); };
   }, [sessionId, navigate, retryCount]);
 
+  // Cosmetic countdown while quick-match searches; the server attaches the
+  // bot on its own timer regardless
+  useEffect(() => {
+    if (!isQuickMatch || lobbyState !== 'waiting') return;
+    setSecondsLeft(Math.ceil(botDelayMs / 1000));
+    const interval = setInterval(() => {
+      setSecondsLeft((s) => (s !== null && s > 0 ? s - 1 : 0));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isQuickMatch, lobbyState, botDelayMs]);
+
   function copyUrl() {
     if (navigator.clipboard) {
       navigator.clipboard.writeText(matchUrl).then(() => {
@@ -184,7 +203,7 @@ export default function LobbyPage() {
             isMe={role !== 'guest'}
           />
           <PlayerSlot
-            label={lobbyState === 'ready' ? (role === 'guest' ? 'You' : 'Friend') : '…'}
+            label={lobbyState === 'ready' ? (role === 'guest' ? 'You' : isQuickMatch ? 'Opponent' : 'Friend') : '…'}
             connected={lobbyState === 'ready'}
             isMe={role === 'guest'}
           />
@@ -197,7 +216,23 @@ export default function LobbyPage() {
           </div>
         )}
 
-        {lobbyState === 'waiting' && (
+        {lobbyState === 'waiting' && isQuickMatch && (
+          <div className="w-full flex flex-col items-center gap-3">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <p className="text-slate-300 font-medium">
+                {secondsLeft === 0 ? 'Summoning CloserBot…' : 'Finding an opponent…'}
+              </p>
+            </div>
+            <p className="text-slate-500 text-sm text-center">
+              {secondsLeft === 0
+                ? 'No humans around — a bot will step in.'
+                : `If nobody shows up${secondsLeft !== null ? ` in ${secondsLeft}s` : ''}, you'll play our bot.`}
+            </p>
+          </div>
+        )}
+
+        {lobbyState === 'waiting' && !isQuickMatch && (
           <div className="w-full flex flex-col gap-3">
             <p className="text-slate-400 text-sm text-center">Send this link to your friend:</p>
             <div className="bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden">
