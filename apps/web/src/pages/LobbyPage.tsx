@@ -24,6 +24,8 @@ export default function LobbyPage() {
 
   const [lobbyState, setLobbyState] = useState<LobbyState>('connecting');
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
+  const [matchReveal, setMatchReveal] = useState<'bot' | 'human' | null>(null);
+  const hadStateRef = useRef(false);
   const [role, setRole] = useState<'host' | 'guest' | null>(null);
   const [copied, setCopied] = useState(false);
   const [gameState, setGameState] = useState<GameState | null>(null);
@@ -106,6 +108,15 @@ export default function LobbyPage() {
       }
 
       if (msg.type === 'game-state') {
+        // Fresh quick-match game: pause on the lobby to reveal who you got
+        if (
+          !hadStateRef.current && isQuickMatch &&
+          msg.state.round === 1 && msg.state.guesses.length === 0 && msg.state.phase === 'playing'
+        ) {
+          setMatchReveal(msg.state.vsBot ? 'bot' : 'human');
+          setTimeout(() => setMatchReveal(null), 1600);
+        }
+        hadStateRef.current = true;
         setGameState(msg.state);
         setPendingGuess(false);
         setGuessError(null);
@@ -134,6 +145,16 @@ export default function LobbyPage() {
 
     return () => { closedByUs = true; ws.close(); };
   }, [sessionId, navigate, retryCount]);
+
+  // A "Play Again" navigation swaps the sessionId without remounting this
+  // component — clear the finished match's state or it would render forever
+  useEffect(() => {
+    setGameState(null);
+    setRole(null);
+    setGuessError(null);
+    setMatchReveal(null);
+    hadStateRef.current = false;
+  }, [sessionId]);
 
   // Cosmetic countdown while quick-match searches; the server attaches the
   // bot on its own timer regardless
@@ -165,7 +186,7 @@ export default function LobbyPage() {
     }
   }
 
-  if (gameState !== null) {
+  if (gameState !== null && matchReveal === null) {
     return (
       <GameView
         state={gameState}
@@ -203,9 +224,16 @@ export default function LobbyPage() {
             isMe={role !== 'guest'}
           />
           <PlayerSlot
-            label={lobbyState === 'ready' ? (role === 'guest' ? 'You' : isQuickMatch ? 'Opponent' : 'Friend') : '…'}
-            connected={lobbyState === 'ready'}
+            label={
+              matchReveal
+                ? (role === 'guest' ? 'You' : matchReveal === 'bot' ? 'CloserBot' : 'Player')
+                : lobbyState === 'ready'
+                  ? (role === 'guest' ? 'You' : isQuickMatch ? 'Opponent' : 'Friend')
+                  : '…'
+            }
+            connected={matchReveal !== null || lobbyState === 'ready'}
             isMe={role === 'guest'}
+            avatar={matchReveal === 'bot' && role !== 'guest' ? '🤖' : undefined}
           />
         </div>
 
@@ -216,7 +244,19 @@ export default function LobbyPage() {
           </div>
         )}
 
-        {lobbyState === 'waiting' && isQuickMatch && (
+        {matchReveal && (
+          <div className="flex flex-col items-center gap-2">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <p className="text-emerald-400 font-semibold">
+                Matched with {matchReveal === 'bot' ? 'CloserBot 🤖' : 'a player'}!
+              </p>
+            </div>
+            <p className="text-slate-500 text-sm">Game starting…</p>
+          </div>
+        )}
+
+        {!matchReveal && lobbyState === 'waiting' && isQuickMatch && (
           <div className="w-full flex flex-col items-center gap-3">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -251,7 +291,7 @@ export default function LobbyPage() {
           </div>
         )}
 
-        {lobbyState === 'ready' && gameState === null && (
+        {!matchReveal && lobbyState === 'ready' && gameState === null && (
           <div className="flex flex-col items-center gap-2">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -281,7 +321,7 @@ export default function LobbyPage() {
   );
 }
 
-function PlayerSlot({ label, connected, isMe }: { label: string; connected: boolean; isMe: boolean }) {
+function PlayerSlot({ label, connected, isMe, avatar }: { label: string; connected: boolean; isMe: boolean; avatar?: string }) {
   return (
     <div className={`flex-1 flex flex-col items-center gap-2 py-4 rounded-2xl border transition-colors ${
       connected
@@ -289,7 +329,7 @@ function PlayerSlot({ label, connected, isMe }: { label: string; connected: bool
         : 'border-slate-800 bg-slate-900/50'
     }`}>
       <div className={`w-12 h-12 rounded-full flex items-center justify-center text-xl ${connected ? 'bg-slate-700' : 'bg-slate-800'}`}>
-        {connected ? '👤' : '?'}
+        {connected ? avatar ?? '👤' : '?'}
       </div>
       <span className={`text-sm font-medium ${connected ? 'text-white' : 'text-slate-600'}`}>{label}</span>
       <span className={`text-xs ${connected ? (isMe ? 'text-emerald-500' : 'text-slate-400') : 'text-slate-700'}`}>

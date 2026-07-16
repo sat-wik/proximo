@@ -209,7 +209,7 @@ export function handleSignaling(socket: WebSocket): void {
         session.gameState = { ...gs, giveUpRequest: { player: role, scope: msg.scope } };
       } else {
         // Not leading — give up directly
-        session.gameState = applyGiveUp(gs, role, msg.scope, session.targetWord);
+        session.gameState = await applyGiveUp(gs, role, msg.scope, session.targetWord);
       }
       commit(session);
     }
@@ -222,7 +222,7 @@ export function handleSignaling(socket: WebSocket): void {
       const req = session.gameState.giveUpRequest;
       if (!req || req.player === role) return; // only other player can accept
 
-      session.gameState = applyGiveUp(session.gameState, req.player, req.scope, session.targetWord);
+      session.gameState = await applyGiveUp(session.gameState, req.player, req.scope, session.targetWord);
       commit(session);
     }
 

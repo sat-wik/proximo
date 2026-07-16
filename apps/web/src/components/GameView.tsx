@@ -33,6 +33,48 @@ function barWidth(rank: number): number {
   return Math.max(1, Math.round(100 * Math.pow(2, -(rank - 1) / 499)));
 }
 
+// Mirrors rankTheme's color bands for the shareable emoji grid
+function rankEmoji(rank: number): string {
+  if (rank === 1) return '🎯';
+  if (rank <= 100) return '🟩';
+  if (rank <= 500) return '🟦';
+  if (rank <= 1500) return '🟨';
+  if (rank <= 5000) return '🟧';
+  return '⬛';
+}
+
+function buildShareLines(state: GameState, myRole: 'host' | 'guest'): string[] {
+  const rounds = state.roundGuesses ?? [];
+  return rounds.map((guesses, i) => {
+    const mine = guesses.filter((g) => g.player === myRole).map((g) => rankEmoji(g.rank)).join('');
+    return `R${i + 1} ${mine}`;
+  });
+}
+
+function NearMisses({ words, guessed }: { words: string[]; guessed: Set<string> }) {
+  return (
+    <div className="w-full max-w-xs">
+      <p className="text-[10px] uppercase tracking-widest text-slate-500 text-center mb-2">
+        So close — the runners-up
+      </p>
+      <div className="flex flex-wrap justify-center gap-1.5">
+        {words.map((w, i) => (
+          <span
+            key={w}
+            className={`text-xs px-2 py-1 rounded-lg border ${
+              guessed.has(w)
+                ? 'border-emerald-600 bg-emerald-950/60 text-emerald-300'
+                : 'border-slate-700 bg-slate-900 text-slate-400'
+            }`}
+          >
+            <span className="opacity-50">#{i + 2}</span> {w}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function StreakFire({ count }: { count: number }) {
   const uid = useId().replace(/:/g, '');
   const ogId = `fgo-${uid}`;
@@ -134,6 +176,8 @@ export default function GameView({
   const [revealingWord, setRevealingWord] = useState(false);
   const [giveUpModal, setGiveUpModal] = useState(false);
   const [showRules, setShowRules] = useState(false);
+  const [resultCopied, setResultCopied] = useState(false);
+  const [playAgain, setPlayAgain] = useState<'idle' | 'loading' | 'error'>('idle');
   const [notification, setNotification] = useState<'hint-accepted' | 'hint-rejected' | 'giveup-accepted' | 'giveup-rejected' | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -254,6 +298,53 @@ export default function GameView({
     onGiveUp(scope);
   }
 
+  const guessedWords = new Set(state.guesses.map((g) => g.word));
+  const shareLines = buildShareLines(state, myRole);
+  const shareText = [
+    `Proximo 🎯 I ${state.matchWinner === myRole ? 'beat' : 'lost to'} ${
+      state.vsBot ? 'CloserBot 🤖' : 'a human'
+    } ${myTotal.toLocaleString()}–${theirTotal.toLocaleString()}`,
+    ...shareLines,
+    window.location.origin,
+  ].join('\n');
+
+  async function handleCopyResult() {
+    if (navigator.share) {
+      try {
+        await navigator.share({ text: shareText });
+        return;
+      } catch {
+        // sheet dismissed — fall through to clipboard
+      }
+    }
+    if (navigator.clipboard) {
+      await navigator.clipboard.writeText(shareText);
+    } else {
+      const el = document.createElement('textarea');
+      el.value = shareText;
+      el.style.cssText = 'position:fixed;opacity:0';
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+    }
+    setResultCopied(true);
+    setTimeout(() => setResultCopied(false), 2000);
+  }
+
+  async function handlePlayAgain() {
+    setPlayAgain('loading');
+    try {
+      const base = import.meta.env.VITE_API_URL ?? '';
+      const res = await fetch(`${base}/quick-match`, { method: 'POST' });
+      if (!res.ok) throw new Error(`Server error: ${res.status}`);
+      const { sessionId, botDelayMs } = await res.json();
+      navigate(`/game/${sessionId}?quick=${botDelayMs}`);
+    } catch {
+      setPlayAgain('error');
+    }
+  }
+
   const myGiveUpRequest = state.giveUpRequest?.player === myRole ? state.giveUpRequest : null;
   const theirGiveUpRequest = state.giveUpRequest?.player !== myRole && state.giveUpRequest !== null
     ? state.giveUpRequest
@@ -277,10 +368,19 @@ export default function GameView({
             </span>
           </div>
 
-          <div className="w-24 flex items-center justify-end gap-2">
+          <div className="w-28 flex items-center justify-end gap-2">
             <span className="text-xs text-slate-600">
               {state.guesses.length} guess{state.guesses.length !== 1 ? 'es' : ''}
             </span>
+            {state.phase === 'playing' && !state.giveUpRequest && (
+              <button
+                onClick={() => setGiveUpModal(true)}
+                aria-label="Give up"
+                className="w-7 h-7 flex-none rounded-full bg-red-950/60 border border-red-800/50 active:bg-red-900/60 text-sm transition-colors"
+              >
+                🏳️
+              </button>
+            )}
             <button
               onClick={() => setShowRules(true)}
               aria-label="How to play"
@@ -299,23 +399,13 @@ export default function GameView({
             <p className="text-red-400 text-sm text-center mb-2">{guessError}</p>
           )}
 
-          {state.hintRequest === null && state.giveUpRequest === null && (
+          {state.hintRequest === null && state.giveUpRequest === null && state.guesses.length >= 50 && (
             <div className="flex justify-between items-center mb-2">
-              {state.guesses.length >= 50 ? (
-                <button
-                  onClick={onRequestHint}
-                  className="text-xs font-medium px-3 py-1.5 rounded-lg bg-slate-800 active:bg-slate-700 text-purple-300 border border-purple-800/50 transition-colors"
-                >
-                  💡 Request Hint
-                </button>
-              ) : (
-                <span />
-              )}
               <button
-                onClick={() => setGiveUpModal(true)}
-                className="text-xs font-medium px-3 py-1.5 rounded-lg bg-red-950/60 active:bg-red-900/60 border border-red-800/50 text-red-400 transition-colors"
+                onClick={onRequestHint}
+                className="text-xs font-medium px-3 py-1.5 rounded-lg bg-slate-800 active:bg-slate-700 text-purple-300 border border-purple-800/50 transition-colors"
               >
-                Give Up
+                💡 Request Hint
               </button>
             </div>
           )}
@@ -425,24 +515,30 @@ export default function GameView({
 
       {/* ── Round-over / match-over overlay ── */}
       {state.phase !== 'playing' && (
-        <div className="absolute inset-0 z-20 bg-slate-950/95 flex flex-col items-center justify-center gap-6 px-6">
+        <div className="absolute inset-0 z-20 bg-slate-950/95 flex flex-col items-center justify-center gap-5 px-6 py-8 overflow-y-auto">
           {state.phase === 'round-over' && (
             <>
               <div className="text-center">
                 <p className="text-xs uppercase tracking-widest text-slate-500 mb-3">
                   Round {state.round} complete
                 </p>
-                {state.revealedTarget && state.roundEndReason === 'kill' && (
+                {state.revealedTarget && (
                   <p className="text-5xl font-bold tracking-tight text-yellow-300 mb-2">
                     {state.revealedTarget}
                   </p>
                 )}
-                {state.roundEndReason === 'kill' && (
-                  <p className={`text-lg font-medium ${state.roundWinner === myRole ? 'text-emerald-400' : 'text-slate-400'}`}>
-                    {state.roundWinner === myRole ? 'You found it! 🎉' : `${opponentName} found it.`}
-                  </p>
-                )}
+                <p className={`text-lg font-medium ${state.roundWinner === myRole ? 'text-emerald-400' : 'text-slate-400'}`}>
+                  {state.roundEndReason === 'kill'
+                    ? state.roundWinner === myRole
+                      ? 'You found it! 🎉'
+                      : `${opponentName} found it.`
+                    : `${state.roundWinner === myRole ? opponentName : 'You'} gave up the round.`}
+                </p>
               </div>
+
+              {state.nearMisses && state.nearMisses.length > 0 && (
+                <NearMisses words={state.nearMisses} guessed={guessedWords} />
+              )}
 
               <div className="w-full max-w-xs bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
                 <div className="flex divide-x divide-slate-800">
@@ -498,15 +594,55 @@ export default function GameView({
                       {state.matchWinner === myRole ? 'You win!' : `${opponentName} wins!`}
                     </p>
                     <p className="text-slate-400 mt-2 text-sm">
-                      {myTotal} vs {theirTotal} — higher score wins
+                      {myTotal.toLocaleString()} vs {theirTotal.toLocaleString()} — higher score wins
                     </p>
                   </div>
-                  <button
-                    onClick={() => navigate('/')}
-                    className="w-full max-w-xs bg-slate-800 active:bg-slate-700 text-white font-semibold text-base py-4 rounded-2xl transition-colors"
-                  >
-                    Back to Home
-                  </button>
+
+                  {state.nearMisses && state.nearMisses.length > 0 && (
+                    <NearMisses words={state.nearMisses} guessed={guessedWords} />
+                  )}
+
+                  {shareLines.length > 0 && (
+                    <div className="w-full max-w-xs bg-slate-900 border border-slate-800 rounded-2xl px-4 py-3">
+                      <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-2 text-center">
+                        Your match
+                      </p>
+                      {shareLines.map((line) => (
+                        <p key={line} className="text-sm tracking-wide leading-6 text-slate-300">
+                          {line}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="w-full max-w-xs flex flex-col gap-2">
+                    <button
+                      onClick={handleCopyResult}
+                      className={`w-full font-semibold text-base py-4 rounded-2xl transition-colors ${
+                        resultCopied
+                          ? 'bg-emerald-900 text-emerald-400'
+                          : 'bg-slate-800 active:bg-slate-700 text-white'
+                      }`}
+                    >
+                      {resultCopied ? '✓ Copied!' : '📋 Copy Result'}
+                    </button>
+                    <button
+                      onClick={handlePlayAgain}
+                      disabled={playAgain === 'loading'}
+                      className="w-full bg-emerald-600 active:bg-emerald-700 disabled:opacity-50 text-white font-bold text-base py-4 rounded-2xl transition-colors"
+                    >
+                      {playAgain === 'loading' ? 'Finding a match…' : '⚡ Play Again'}
+                    </button>
+                    {playAgain === 'error' && (
+                      <p className="text-red-400 text-xs text-center">Could not reach server — try again.</p>
+                    )}
+                    <button
+                      onClick={() => navigate('/')}
+                      className="w-full py-2 text-slate-500 text-sm transition-colors"
+                    >
+                      Back to Home
+                    </button>
+                  </div>
                 </>
               )}
             </>

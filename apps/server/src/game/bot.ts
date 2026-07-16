@@ -100,7 +100,7 @@ export function maybeBotAct(session: Session): void {
     schedule(session, ACCEPT_GIVE_UP_DELAY_MS, async () => {
       const req = session.gameState?.giveUpRequest;
       if (!req || req.player !== 'host' || !session.targetWord) return;
-      session.gameState = applyGiveUp(session.gameState!, 'host', req.scope, session.targetWord);
+      session.gameState = await applyGiveUp(session.gameState!, 'host', req.scope, session.targetWord);
       commit(session);
     });
     return;

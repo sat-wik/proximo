@@ -79,6 +79,10 @@ function check(label, ok, detail = '') {
     if (state.round === 2) sentNextRound = false;
   }
 
+  check('near misses revealed at round end', state.nearMisses?.length === 10, `got ${state.nearMisses?.length}`);
+  check('round history kept for share card', state.roundGuesses?.length === 2, `got ${state.roundGuesses?.length} rounds`);
+  check('round history has round-1 guesses', (state.roundGuesses?.[0]?.length ?? 0) >= 3);
+
   const r1 = botGuesses.filter((g) => g.round === 1);
   check('bot made guesses in round 1', r1.length >= 3, `${r1.length} guesses`);
   const bestByTurn = [];

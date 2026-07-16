@@ -4,8 +4,17 @@ import {
   ROUNDS_PER_MATCH,
   STEAL_BONUS_VALUE,
 } from '@closer/shared';
-import { getRank } from '../services/embedding-service.js';
+import { getRank, getWordsByRank } from '../services/embedding-service.js';
 import { generateHint } from '../services/hint-service.js';
+
+/** The 10 words closest to the target (ranks 2–11), for the round-end reveal. */
+async function fetchNearMisses(target: string): Promise<string[]> {
+  try {
+    return (await getWordsByRank(target)).slice(1, 11);
+  } catch {
+    return []; // a rank-table hiccup must never break round end
+  }
+}
 
 
 export function initialGameState(): GameState {
@@ -41,22 +50,25 @@ export function nextRoundState(current: GameState): GameState {
     giveUpRequest: null,
     roundEndReason: null,
     vsBot: current.vsBot,
+    roundGuesses: current.roundGuesses,
   };
 }
 
-export function applyGiveUp(
+export async function applyGiveUp(
   state: GameState,
   givingUp: 'host' | 'guest',
   scope: 'round' | 'game',
   target: string,
-): GameState {
+): Promise<GameState> {
   const roundWinner: 'host' | 'guest' = givingUp === 'host' ? 'guest' : 'host';
   const roundScores = [...state.roundScores, { ...state.scores }];
   const totHost  = roundScores.reduce((s, r) => s + r.host,  0);
   const totGuest = roundScores.reduce((s, r) => s + r.guest, 0);
   const matchWinner: 'host' | 'guest' = totHost >= totGuest ? 'host' : 'guest';
+  const nearMisses = await fetchNearMisses(target);
+  const roundGuesses = [...(state.roundGuesses ?? []), state.guesses];
 
-  if (scope === 'game') {
+  if (scope === 'game' || state.round === ROUNDS_PER_MATCH) {
     return {
       ...state,
       scores: { host: 0, guest: 0 },
@@ -67,21 +79,8 @@ export function applyGiveUp(
       revealedTarget: target,
       giveUpRequest: null,
       roundEndReason: 'give-up',
-    };
-  }
-
-  // scope === 'round'
-  if (state.round === ROUNDS_PER_MATCH) {
-    return {
-      ...state,
-      scores: { host: 0, guest: 0 },
-      phase: 'match-over',
-      roundScores,
-      roundWinner,
-      matchWinner,
-      revealedTarget: target,
-      giveUpRequest: null,
-      roundEndReason: 'give-up',
+      nearMisses,
+      roundGuesses,
     };
   }
 
@@ -94,6 +93,8 @@ export function applyGiveUp(
     revealedTarget: target,
     giveUpRequest: null,
     roundEndReason: 'give-up',
+    nearMisses,
+    roundGuesses,
   };
 }
 
@@ -157,7 +158,7 @@ export async function applyGuess(
   const isKill = rank === 1;
 
   let phase: GameState['phase'] = state.phase;
-  let { roundWinner, matchWinner, roundScores, revealedTarget } = state;
+  let { roundWinner, matchWinner, roundScores, revealedTarget, nearMisses, roundGuesses } = state;
   let roundEndReason: GameState['roundEndReason'] = state.roundEndReason;
 
   if (isKill) {
@@ -166,6 +167,8 @@ export async function applyGuess(
     roundScores = [...state.roundScores, { ...newScores }];
     roundEndReason = 'kill';
     phase = 'round-over';
+    nearMisses = await fetchNearMisses(target);
+    roundGuesses = [...(state.roundGuesses ?? []), [...state.guesses, newGuess]];
 
     if (state.round === ROUNDS_PER_MATCH) {
       const totHost  = roundScores.reduce((s, r) => s + r.host,  0);
@@ -188,6 +191,8 @@ export async function applyGuess(
       matchWinner,
       revealedTarget,
       roundEndReason,
+      nearMisses,
+      roundGuesses,
     },
   };
 }
