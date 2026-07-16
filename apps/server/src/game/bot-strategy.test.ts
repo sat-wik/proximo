@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  KILL_TURN_GRACE,
   KILL_TURN_MAX,
   KILL_TURN_MIN,
   chooseTargetRank,
@@ -41,9 +42,9 @@ describe('chooseTargetRank', () => {
     }
   });
 
-  it('always returns 1 by killTurn + 3, even when far from the target', () => {
+  it('always returns 1 by killTurn + grace, even when far from the target', () => {
     for (let seed = 0; seed < 500; seed++) {
-      const s: BotRoundState = { bestRank: 9000, turnIndex: 15, killTurn: 12 };
+      const s: BotRoundState = { bestRank: 9000, turnIndex: 12 + KILL_TURN_GRACE, killTurn: 12 };
       expect(chooseTargetRank(s, seededRng(seed))).toBe(1);
     }
   });
@@ -52,7 +53,7 @@ describe('chooseTargetRank', () => {
     for (let seed = 0; seed < 500; seed++) {
       const rng = seededRng(seed);
       for (let turn = 1; turn < 8; turn++) {
-        const floor = Math.max(2, Math.round(3000 * 0.55 ** turn));
+        const floor = Math.max(2, Math.round(3000 * 0.6 ** turn));
         // bestRank of 2 pulls convergence far below the floor; floor must win
         const s: BotRoundState = { bestRank: 2, turnIndex: turn, killTurn: 12 };
         expect(chooseTargetRank(s, rng)).toBeGreaterThanOrEqual(floor);
@@ -60,14 +61,14 @@ describe('chooseTargetRank', () => {
     }
   });
 
-  it('simulated rounds end between killTurn and killTurn + 3', () => {
+  it('simulated rounds end between killTurn and killTurn + grace', () => {
     for (let seed = 0; seed < 1000; seed++) {
       const rng = seededRng(seed);
       const killTurn = rollKillTurn(rng);
       const s: BotRoundState = { bestRank: Infinity, turnIndex: 0, killTurn };
 
       let killed = false;
-      for (let turn = 0; turn < 30; turn++) {
+      for (let turn = 0; turn < 40; turn++) {
         const rank = chooseTargetRank(s, rng);
         if (rank === 1) {
           killed = true;
@@ -80,7 +81,7 @@ describe('chooseTargetRank', () => {
 
       expect(killed).toBe(true);
       expect(s.turnIndex).toBeGreaterThanOrEqual(killTurn);
-      expect(s.turnIndex).toBeLessThanOrEqual(killTurn + 3);
+      expect(s.turnIndex).toBeLessThanOrEqual(killTurn + KILL_TURN_GRACE);
     }
   });
 });

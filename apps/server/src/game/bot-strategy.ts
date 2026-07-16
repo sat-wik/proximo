@@ -2,21 +2,28 @@
 // the injected rng (0 ≤ rng() < 1) so behavior is fully testable.
 
 // Tuning knobs — these set how human the bot feels and how long rounds run.
-export const KILL_TURN_MIN = 8;
-export const KILL_TURN_MAX = 12;
-const KILL_TURN_GRACE = 3; // forced finish this many turns past killTurn
-const KILL_READY_RANK = 30; // natural kill only once the bot has gotten this close
-const KILL_CHANCE = 0.6;
+// Difficulty lives mostly in KILL_TURN_*: later kills give the human more
+// turns to snipe the target off the bot's visible near-misses.
+export const KILL_TURN_MIN = 11;
+export const KILL_TURN_MAX = 17;
+export const KILL_TURN_GRACE = 6; // forced finish this many turns past killTurn
+const KILL_READY_RANK = 15; // natural kill only once the bot has gotten this close
+const KILL_CHANCE = 0.5;
+const CLOSING_FACTOR_MIN = 0.3; // endgame: decisive convergence toward the target
+const CLOSING_FACTOR_MAX = 0.55;
 const FLOOR_BASE = 3000; // per-turn floor blocks suspiciously early perfection
-const FLOOR_DECAY = 0.55;
+const FLOOR_DECAY = 0.6;
 const OPENING_MIN = 2000;
 const OPENING_MAX = 7000;
 const MISS_CHANCE = 0.22; // exploratory miss: visibly regress instead of converging
 const MISS_FACTOR_MIN = 1.8;
 const MISS_FACTOR_MAX = 4.0;
 const MISS_RANK_CAP = 15000;
-const CONVERGE_FACTOR_MIN = 0.45;
-const CONVERGE_FACTOR_MAX = 0.8;
+const PLATEAU_CHANCE = 0.28; // circle the current neighborhood without improving
+const PLATEAU_FACTOR_MIN = 0.85;
+const PLATEAU_FACTOR_MAX = 1.6;
+const CONVERGE_FACTOR_MIN = 0.55;
+const CONVERGE_FACTOR_MAX = 0.85;
 const MAX_RANK = 19999;
 
 export interface BotRoundState {
@@ -36,17 +43,29 @@ function uniform(rng: () => number, min: number, max: number): number {
 /** Returns the rank the bot aims for this turn. 1 = go for the kill. */
 export function chooseTargetRank(s: BotRoundState, rng: () => number): number {
   if (s.turnIndex >= s.killTurn + KILL_TURN_GRACE) return 1;
-  if (s.turnIndex >= s.killTurn && s.bestRank <= KILL_READY_RANK && rng() < KILL_CHANCE) return 1;
 
   const floor = Math.max(2, Math.round(FLOOR_BASE * FLOOR_DECAY ** s.turnIndex));
+
+  // Endgame: close the distance decisively, but only guess the word itself
+  // once genuinely near it — a kill from far away reads as superhuman
+  if (s.turnIndex >= s.killTurn) {
+    if (s.bestRank <= KILL_READY_RANK && rng() < KILL_CHANCE) return 1;
+    const desired = Math.round(s.bestRank * uniform(rng, CLOSING_FACTOR_MIN, CLOSING_FACTOR_MAX));
+    return Math.min(MAX_RANK, Math.max(2, Math.max(desired, floor)));
+  }
 
   let desired: number;
   if (s.turnIndex === 0) {
     desired = Math.round(uniform(rng, OPENING_MIN, OPENING_MAX));
-  } else if (rng() < MISS_CHANCE) {
-    desired = Math.min(MISS_RANK_CAP, Math.round(s.bestRank * uniform(rng, MISS_FACTOR_MIN, MISS_FACTOR_MAX)));
   } else {
-    desired = Math.round(s.bestRank * uniform(rng, CONVERGE_FACTOR_MIN, CONVERGE_FACTOR_MAX));
+    const roll = rng();
+    if (roll < MISS_CHANCE) {
+      desired = Math.min(MISS_RANK_CAP, Math.round(s.bestRank * uniform(rng, MISS_FACTOR_MIN, MISS_FACTOR_MAX)));
+    } else if (roll < MISS_CHANCE + PLATEAU_CHANCE) {
+      desired = Math.round(s.bestRank * uniform(rng, PLATEAU_FACTOR_MIN, PLATEAU_FACTOR_MAX));
+    } else {
+      desired = Math.round(s.bestRank * uniform(rng, CONVERGE_FACTOR_MIN, CONVERGE_FACTOR_MAX));
+    }
   }
 
   return Math.min(MAX_RANK, Math.max(2, Math.max(desired, floor)));
