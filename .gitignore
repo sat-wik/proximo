@@ -5,23 +5,19 @@ dist/
 
 # pnpm
 .pnpm-store/
-
 # Python venv for embeddings
 packages/embeddings/.venv/
-
 # Vite
 apps/web/dist/
 apps/web/tsconfig.tsbuildinfo
-
 # Embeddings — large precomputed files, committed separately
 data/ranks/
-
 # Runtime session state
 data/sessions.json
-
 # OS
 .DS_Store
 Thumbs.db
-
 # Claude Code
 CLAUDE.md
+.vercel
+.env*.local
