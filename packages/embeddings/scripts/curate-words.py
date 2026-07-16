@@ -2,19 +2,27 @@
 Curate the dictionary and target pool.
 
 Run from the project root:
-    python packages/embeddings/scripts/curate-words.py
+    packages/embeddings/.venv/bin/python packages/embeddings/scripts/curate-words.py
 
 Outputs:
-    data/dictionary.json   — 20,000 guessable words, frequency-ordered
-    data/targets.json      — ~3,000 common English nouns
+    data/dictionary.json   — 25,000 guessable words, frequency-ordered
+    data/targets.json      — 3,000 common English nouns
 
-Strategy:
-  - Dictionary: top 20k words from wordfreq, minus pure function words.
-    Players can guess anything recognizable, so we keep nouns, verbs, and
-    adjectives — just strip determiners, pronouns, prepositions, and modals.
-  - Targets: WordNet nouns cross-referenced with wordfreq frequency scores.
-    Nouns make the best targets: concrete, unambiguous, familiar.
-    Sorted by frequency, filtered to a familiar-but-not-trivial sweet spot.
+Strategy (structural filters first, blocklists last):
+  1. Candidates come from wordfreq's top-200k English list (frequency order).
+  2. A word must lemmatize into WordNet (any part of speech) to count as
+     English — this kills brands, misspellings, and foreign words that leak
+     into web-frequency data, while keeping inflections (dogs, running).
+  3. Proper nouns are detected structurally: a word whose WordNet presence
+     is exclusively instance synsets (London, Jesus, America) is a proper
+     noun. First names come from the NLTK names corpus, minus a hand
+     allowlist of names that are primarily common words (rose, hope, mark).
+  4. A curated blocklist removes slurs, profanity, explicit sexual terms,
+     and drug terms from both lists; a second, stricter tier removes
+     sensitive-but-legitimate words (violence, disease…) from targets only.
+  5. Targets are additionally required to be primary-sense nouns, base
+     forms (no plurals/gerunds), 4–10 letters, and inside a familiarity
+     frequency band.
 """
 
 import json
@@ -28,307 +36,395 @@ except ImportError:
 
 try:
     import nltk
-    from nltk.corpus import wordnet
+    from nltk.corpus import wordnet, names
 except ImportError:
     sys.exit("Missing: pip install nltk")
 
-# ---------------------------------------------------------------------------
-# Download WordNet if not already present
-# ---------------------------------------------------------------------------
-def ensure_wordnet():
-    try:
-        wordnet.synsets("test")
-    except LookupError:
-        print("Downloading NLTK WordNet data...")
-        nltk.download("wordnet", quiet=True)
-        nltk.download("omw-1.4", quiet=True)
+DICTIONARY_SIZE = 25_000
+TARGET_POOL_SIZE = 3_000
+
+
+def ensure_corpora():
+    for corpus in ("wordnet", "omw-1.4", "names"):
+        try:
+            nltk.data.find(f"corpora/{corpus}")
+        except LookupError:
+            print(f"Downloading NLTK corpus: {corpus}...")
+            nltk.download(corpus.replace("-", "-"), quiet=True)
+
 
 # ---------------------------------------------------------------------------
-# Function words — purely grammatical, never good guesses
+# Function words — purely grammatical, never useful guesses
 # ---------------------------------------------------------------------------
 FUNCTION_WORDS = {
-    "the", "a", "an", "this", "that", "these", "those", "each", "every",
-    "either", "neither", "both", "all", "any", "some", "few", "many",
-    "much", "more", "most", "other", "another", "such", "what", "which",
-    "whose", "whatever", "whichever", "whoever",
-    "i", "me", "my", "myself", "we", "us", "our", "ours", "ourselves",
-    "you", "your", "yours", "yourself", "yourselves",
-    "he", "him", "his", "himself", "she", "her", "hers", "herself",
-    "it", "its", "itself", "they", "them", "their", "theirs", "themselves",
-    "one", "ones", "who", "whom", "whoever", "whomever",
-    "be", "am", "is", "are", "was", "were", "been", "being",
-    "have", "has", "had", "having", "do", "does", "did", "done", "doing",
-    "will", "would", "shall", "should", "may", "might", "must",
-    "can", "could", "ought", "dare", "need",
-    "in", "on", "at", "by", "for", "with", "about", "against", "between",
-    "into", "through", "during", "before", "after", "above", "below",
-    "from", "up", "down", "out", "off", "over", "under", "again",
-    "further", "then", "once", "here", "there", "across", "along",
-    "around", "behind", "beside", "besides", "beyond", "except", "inside",
-    "near", "outside", "past", "per", "plus", "since", "throughout",
-    "toward", "towards", "underneath", "until", "unto", "upon", "via",
-    "within", "without", "worth",
-    "and", "but", "or", "nor", "so", "yet",
-    "although", "because", "since", "unless", "until", "while", "though",
-    "even", "whether", "whereas", "whereby",
-    "very", "too", "quite", "rather", "just", "only", "also", "still",
-    "already", "soon", "now", "then", "always", "never", "ever",
-    "often", "usually", "sometimes", "perhaps", "maybe", "probably",
-    "certainly", "definitely", "really", "almost", "enough", "else",
+    "the", "and", "but", "nor", "yet", "for", "this", "that", "these",
+    "those", "each", "every", "either", "neither", "both", "all", "any",
+    "some", "few", "many", "much", "more", "most", "other", "another",
+    "such", "what", "which", "whose", "whatever", "whichever", "whoever",
+    "whomever", "who", "whom", "how", "where", "why", "when", "than",
+    "not", "own", "same", "very", "too", "quite", "rather", "just",
+    "only", "also", "still", "already", "soon", "now", "then", "always",
+    "never", "ever", "often", "usually", "sometimes", "perhaps", "maybe",
+    "was", "were", "been", "being", "are", "has", "had", "having",
+    "does", "did", "done", "doing", "will", "would", "shall", "should",
+    "may", "might", "must", "can", "could", "ought",
+    "his", "her", "hers", "him", "she", "its", "they", "them", "their",
+    "theirs", "our", "ours", "your", "yours", "myself", "yourself",
+    "himself", "herself", "itself", "ourselves", "themselves",
+    "into", "onto", "with", "within", "without", "about", "against",
+    "between", "through", "during", "before", "after", "above", "below",
+    "from", "off", "over", "under", "again", "further", "once", "here",
+    "there", "across", "along", "around", "behind", "beside", "besides",
+    "beyond", "except", "inside", "near", "outside", "past", "per",
+    "plus", "since", "throughout", "toward", "towards", "underneath",
+    "until", "unto", "upon", "via", "although", "because", "unless",
+    "while", "though", "even", "whether", "whereas", "whereby",
     "however", "therefore", "thus", "hence", "otherwise", "instead",
     "meanwhile", "nevertheless", "nonetheless", "furthermore", "moreover",
-    "accordingly", "consequently", "subsequently",
-    "said", "says", "okay", "ok", "yeah", "yes", "no",
-    "well", "like", "just", "get", "got", "been",
-    "than", "when", "own", "same", "ago", "way", "away", "back",
-    # Interrogatives and negation
-    "not", "how", "where", "why", "whom",
-    # Common adjectives used purely as modifiers (bad guesses, too generic)
-    "good", "bad", "new", "old", "big", "small", "long", "short",
-    "high", "low", "great", "little", "large", "right", "left",
-    "next", "last", "first", "second", "third",
-    "many", "much", "few", "several", "certain", "whole", "main",
+    "yeah", "yes", "okay", "hey", "hello", "wow", "oh", "ah", "um",
+    "gonna", "wanna", "gotta", "lol", "omg", "etc", "aka",
 }
 
-PROFANITY = {
-    "shit", "fuck", "fucking", "fucker", "cunt", "cock", "dick", "ass",
-    "arse", "bitch", "damn", "piss", "crap", "slut", "twat", "wank",
-    "prick", "turd", "douche", "bastard", "asshole", "bullshit",
-    "shitty", "pussy",
+# ---------------------------------------------------------------------------
+# Blocklist tier 1 — excluded from BOTH dictionary and targets:
+# slurs, profanity, explicit sexual terms, drug terms.
+# ---------------------------------------------------------------------------
+BLOCKLIST = {
+    # Slurs (never acceptable in any list)
+    "nigger", "nigga", "niggers", "niggas", "faggot", "faggots", "fag",
+    "fags", "kike", "spic", "chink", "wetback", "gook", "tranny",
+    "retard", "retards", "retarded", "dyke", "coon", "raghead",
+    # Profanity
+    "fuck", "fucking", "fucked", "fucker", "fuckers", "fucks", "shit",
+    "shits", "shitty", "shitting", "bullshit", "horseshit", "cunt",
+    "cunts", "cock", "cocks", "dick", "dicks", "dickhead", "ass",
+    "asses", "asshole", "assholes", "arse", "arsehole", "bitch",
+    "bitches", "bitchy", "damn", "damned", "goddamn", "piss", "pissed",
+    "pissing", "crap", "crappy", "slut", "sluts", "slutty", "twat",
+    "wank", "wanker", "prick", "pricks", "turd", "turds", "douche",
+    "douchebag", "bastard", "bastards", "pussy", "pussies", "tits",
+    "titties", "boob", "boobs", "whore", "whores", "hoe", "hoes",
+    "skank", "motherfucker", "motherfucking", "jackass", "dumbass",
+    "badass", "hardass", "smartass",
+    # Explicit sexual terms
+    "sex", "sexy", "sexual", "sexually", "sexuality", "porn", "porno",
+    "pornography", "pornographic", "erotic", "erotica", "orgasm",
+    "orgasms", "penis", "penises", "vagina", "vaginas", "vaginal",
+    "anal", "anus", "rectum", "genital", "genitals", "genitalia",
+    "scrotum", "testicle", "testicles", "clitoris", "semen", "sperm",
+    "ejaculate", "ejaculation", "masturbate", "masturbation", "libido",
+    "aroused", "arousal", "horny", "kinky", "fetish", "fetishes",
+    "bdsm", "bondage", "dildo", "vibrator", "condom", "condoms",
+    "viagra", "prostitute", "prostitutes", "prostitution", "brothel",
+    "hooker", "hookers", "stripper", "strippers", "striptease",
+    "orgy", "threesome", "incest", "pedophile", "pedophilia",
+    "molest", "molester", "molestation", "rape", "raped", "rapist",
+    "rapists", "raping", "nympho", "smut", "xxx", "milf", "hentai",
+    "blowjob", "handjob", "cum", "cumming", "jizz", "boner",
+    "nipple", "nipples", "topless", "foreplay", "kamasutra",
+    # Drugs
+    "cocaine", "heroin", "meth", "methamphetamine", "amphetamine",
+    "amphetamines", "marijuana", "cannabis", "opium", "opioid",
+    "opioids", "opiate", "opiates", "fentanyl", "oxycodone", "ketamine",
+    "lsd", "mdma", "psilocybin", "narcotic", "narcotics", "crackhead",
+    "stoner", "stoned", "junkie", "junkies", "overdose", "overdosed",
+    # Hate / extremist terms
+    "nazi", "nazis", "hitler", "jihad", "jihadist", "isis", "kkk",
+    "swastika", "genocide", "holocaust", "lynching", "lynch",
+}
+
+# ---------------------------------------------------------------------------
+# Blocklist tier 2 — legitimate vocabulary (fine to GUESS) that makes a
+# poor or uncomfortable TARGET word. Excluded from targets only.
+# ---------------------------------------------------------------------------
+TARGET_BLOCKLIST = {
+    # Violence / death
+    "murder", "murderer", "suicide", "suicidal", "terrorist", "terrorism",
+    "massacre", "slaughter", "torture", "hostage", "kidnap", "assault",
+    "abortion", "corpse", "cadaver", "slavery", "slave", "funeral",
+    "coffin", "grave", "cemetery", "widow", "orphan", "execution",
+    "hanging", "strangle", "suffocate", "bloodshed", "warfare", "bomb",
+    "bomber", "sniper", "shooter", "shooting", "gunman", "stabbing",
+    # Disease / bodily
+    "cancer", "tumor", "leukemia", "diabetes", "dementia", "alzheimer",
+    "hiv", "aids", "herpes", "chlamydia", "syphilis", "gonorrhea",
+    "diarrhea", "vomit", "feces", "urine", "urinal", "rectal", "enema",
+    "hemorrhoid", "abscess", "pus", "mucus", "phlegm", "corpse",
+    "autopsy", "morgue", "miscarriage", "stillborn", "leprosy", "plague",
+    "anorexia", "bulimia", "obesity",
+    # Substances (legal but off-tone as answers)
+    "nicotine", "tobacco", "cigarette", "cigar", "vodka", "whiskey",
+    "tequila", "bourbon", "hangover", "drunk", "drunken", "alcoholic",
+    "alcoholism", "addict", "addiction", "casino", "gambling",
+    # Religion / identity (fine words, divisive answers)
+    "bible", "koran", "quran", "allah", "buddha", "christ", "satan",
+    "hell", "heaven", "mosque", "church", "synagogue", "atheist",
+    "muslim", "christian", "jewish", "catholic", "hindu", "buddhist",
+    "gay", "lesbian", "transgender", "queer", "racism", "racist",
+    "sexism", "sexist", "nude", "naked", "underwear", "lingerie",
+    "bra", "panties", "thong", "cleavage", "breast", "breasts",
+    "buttock", "buttocks", "groin", "crotch", "pubic",
+    # Drug slang whose primary sense is borderline
+    "dope", "weed", "bong", "joint", "hash", "acid", "crack",
+    # Brand-adjacent or leering connotations
+    "playboy", "playmate", "mistress", "harem", "geisha",
+    # Calendar proper-ish nouns kept in the dictionary via the allowlist
+    "april", "june", "august", "summer", "autumn", "dawn",
+}
+
+# Number words are WordNet nouns but make meaningless targets
+NUMBER_WORDS = {
+    "zero", "one", "two", "three", "four", "five", "six", "seven",
+    "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen",
+    "fifteen", "sixteen", "seventeen", "eighteen", "nineteen", "twenty",
+    "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety",
+    "hundred", "thousand", "million", "billion", "trillion", "dozen",
+    "first", "second", "third", "fourth", "fifth", "sixth", "seventh",
+    "eighth", "ninth", "tenth", "half", "quarter", "couple",
+}
+
+# ---------------------------------------------------------------------------
+# Names-corpus entries that are primarily common English words — keep these
+# despite appearing in the NLTK names corpus.
+# ---------------------------------------------------------------------------
+NAME_WORD_ALLOWLIST = {
+    "rose", "roses", "daisy", "iris", "lily", "ivy", "jasmine", "hazel",
+    "olive", "pearl", "ruby", "jade", "amber", "opal", "coral", "violet",
+    "poppy", "heather", "laurel", "willow", "fern", "flora", "blossom",
+    "hope", "faith", "grace", "joy", "patience", "prudence", "charity",
+    "honey", "melody", "harmony", "destiny", "serenity", "trinity",
+    "dawn", "autumn", "summer", "sunny", "misty", "windy", "stormy",
+    "rainy", "crystal", "star", "sky", "raven", "robin", "wren", "colt",
+    "buck", "fox", "wolf", "bear", "cat", "kitty", "bunny", "birdie",
+    "mark", "marks", "bill", "bills", "frank", "franks", "ray", "rays",
+    "grant", "grants", "hunter", "hunters", "mason", "masons", "cooper",
+    "coopers", "carter", "carters", "tanner", "tanners", "porter",
+    "porters", "miller", "millers", "baker", "bakers", "farmer",
+    "farmers", "fisher", "fishers", "shepherd", "shepherds", "smith",
+    "smiths", "taylor", "taylors", "turner", "turners", "walker",
+    "walkers", "weaver", "weavers", "gardner", "sawyer", "chase",
+    "dean", "deans", "drew", "wade", "miles", "chip", "chips", "cliff",
+    "cliffs", "clay", "brook", "brooks", "glen", "glens", "heath",
+    "lane", "lanes", "reed", "reeds", "rusty", "sandy", "rocky",
+    "stone", "stones", "wood", "woods", "worth", "young", "noble",
+    "sterling", "art", "arts", "belle", "bells", "bonnie", "candy",
+    "cherry", "cherries", "ginger", "goldie", "kit", "kits", "major",
+    "majors", "marshal", "marshals", "duke", "dukes", "earl", "earls",
+    "king", "kings", "page", "pages", "penny", "pennies", "prince",
+    "princes", "sage", "scarlet", "sherry", "tawny", "angel", "angels",
+    "april", "may", "june", "august", "gene", "genes", "jean", "jeans",
+    "jimmy", "jack", "jacks", "josh", "bob", "bobs", "dolly", "dot",
+    "dots", "fanny", "nick", "nicks", "pat", "pats", "peg", "pegs",
+    "polly", "sally", "tommy", "victor", "victors", "wanda", "biff",
+    "skip", "skips", "spike", "spikes", "tab", "tabs", "van", "vans",
+}
+
+# Brands and internet-era proper nouns that sneak past WordNet (e.g. the
+# verb "google") or the instance test.
+BRAND_BLOCKLIST = {
+    "google", "googled", "googling", "netflix", "twitter", "facebook",
+    "instagram", "youtube", "amazon", "microsoft", "apple's", "iphone",
+    "ipad", "ipod", "android", "tiktok", "snapchat", "whatsapp",
+    "reddit", "wikipedia", "yahoo", "ebay", "paypal", "uber", "airbnb",
+    "spotify", "tesla", "walmart", "starbucks", "mcdonalds", "nike",
+    "adidas", "disney", "pixar", "marvel", "pokemon", "nintendo",
+    "playstation", "xbox", "minecraft", "fortnite", "linux", "windows",
+    "photoshop", "bitcoin", "ethereum", "harvard", "oxford", "stanford",
+    "yale", "princeton", "gmail", "internet",
+}
+
+# Modern vocabulary that predates nothing but WordNet's last update.
+MODERN_ALLOWLIST = {
+    "smartphone", "smartphones", "selfie", "selfies", "emoji", "emojis",
+    "podcast", "podcasts", "blog", "blogs", "blogger", "bloggers",
+    "wifi", "app", "apps", "hashtag", "hashtags", "meme", "memes",
+    "startup", "startups", "website", "websites", "webcam", "webpage",
+    "email", "emails", "texting", "download", "downloads", "upload",
+    "uploads", "username", "password", "passwords", "login", "logout",
+    "online", "offline", "unfollow", "unfriend", "crowdfunding",
+    "livestream", "vlog", "vlogger", "chatbot", "chatbots", "malware",
+    "phishing", "spam", "screenshot", "screenshots", "touchscreen",
+    "earbuds", "drone", "drones", "vegan", "vegans", "gluten",
+    "kale", "quinoa", "smoothie", "smoothies", "barista", "baristas",
+    "foodie", "foodies", "brunch", "staycation", "binge", "spoiler",
+    "spoilers", "reboot", "remix", "playlist", "playlists", "streaming",
+}
+
+_NAME_SET: set[str] = set()
+
+
+def init_name_set():
+    global _NAME_SET
+    _NAME_SET = {
+        n.lower()
+        for n in names.words("male.txt") + names.words("female.txt")
+    }
+    _NAME_SET -= NAME_WORD_ALLOWLIST
+    _NAME_SET -= DEMONYM_ALLOWLIST  # "French" is in the names corpus
+
+
+# Nationality / language / religion words are capitalized-only in WordNet
+# but are guesses players WILL type — keep them in the dictionary (they
+# remain barred from targets, which require a lowercase lemma).
+DEMONYM_ALLOWLIST = {
+    "american", "americans", "english", "french", "spanish", "german",
+    "germans", "italian", "italians", "chinese", "japanese", "russian",
+    "russians", "arabic", "latin", "greek", "greeks", "hindi", "korean",
+    "koreans", "dutch", "portuguese", "polish", "turkish", "hebrew",
+    "irish", "scottish", "welsh", "mexican", "mexicans", "indian",
+    "indians", "african", "africans", "european", "europeans", "asian",
+    "asians", "canadian", "canadians", "australian", "australians",
+    "british", "roman", "romans", "viking", "vikings", "christian",
+    "christians", "muslim", "muslims", "jewish", "catholic", "catholics",
+    "buddhist", "buddhists", "hindu", "hindus", "protestant",
+    "protestants", "egyptian", "egyptians", "persian", "persians",
+    "swedish", "norwegian", "danish", "finnish", "thai", "vietnamese",
+    "indonesian", "brazilian", "brazilians", "scandinavian",
 }
 
 
-def is_valid_dictionary_word(word: str) -> bool:
-    if word in FUNCTION_WORDS or word in PROFANITY:
-        return False
-    if not (3 <= len(word) <= 14):
-        return False
-    if not word.isalpha() or word != word.lower():
-        return False
-    return True
+def has_lowercase_lemma(w: str) -> bool:
+    """True if WordNet writes w lowercase somewhere.
 
-
-def get_wordnet_nouns() -> set[str]:
-    """Return words whose PRIMARY (most frequent) WordNet sense is a noun.
-
-    wordnet.synsets(w) returns synsets ordered by usage frequency, so
-    checking synsets(w)[0].pos() == 'n' ensures the word is primarily a noun,
-    not an adjective or verb that can be used nominally ('general', 'local').
+    Lemma names preserve capitalization: "china" (porcelain) exists
+    lowercase, but "York"/"Musa"/"Romanian" only ever appear capitalized —
+    a reliable proper-noun signal that instance-checking alone misses
+    (nationalities, genus names, and royal houses aren't instance synsets).
     """
-    # Collect candidates: any word appearing in at least one noun synset
-    candidates: set[str] = set()
-    for synset in wordnet.all_synsets("n"):
-        for lemma in synset.lemmas():
-            w = lemma.name().lower()
-            if w.isalpha() and "_" not in w:
-                candidates.add(w)
-
-    # Keep only those whose primary sense is noun
-    primary_nouns: set[str] = set()
-    for w in candidates:
-        synsets = wordnet.synsets(w)
-        if synsets and synsets[0].pos() == "n":
-            primary_nouns.add(w)
-    return primary_nouns
-
-
-# Proper nouns and proper-noun-adjacent words that leak into WordNet
-PROPER_NOUN_BLOCKLIST = {
-    # Days / months
-    "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
-    "january", "february", "march", "april", "june", "july", "august",
-    "september", "october", "november", "december",
-    # Common first names
-    "michael", "david", "james", "john", "robert", "william", "richard",
-    "joseph", "charles", "thomas", "christopher", "daniel", "matthew",
-    "anthony", "donald", "mark", "paul", "steven", "andrew", "kenneth",
-    "george", "joshua", "kevin", "brian", "edward", "ronald", "timothy",
-    "jason", "jeffrey", "ryan", "jacob", "gary", "nicholas", "eric",
-    "jonathan", "stephen", "larry", "justin", "scott", "brandon", "frank",
-    "benjamin", "raymond", "gregory", "samuel", "patrick", "alexander",
-    "jack", "dennis", "jerry", "tyler", "aaron", "henry", "douglas",
-    "peter", "adam", "nathan", "zachary", "walter", "harold", "kyle",
-    "mary", "patricia", "jennifer", "linda", "barbara", "elizabeth",
-    "susan", "jessica", "sarah", "karen", "lisa", "nancy", "betty",
-    "margaret", "sandra", "ashley", "emily", "dorothy", "melissa",
-    "deborah", "stephanie", "rebecca", "sharon", "laura", "cynthia",
-    "kathleen", "amy", "shirley", "angela", "helen", "anna", "brenda",
-    "pamela", "emma", "nicole", "samantha", "katherine", "rachel",
-    "carolyn", "virginia", "maria", "heather", "diane", "julie", "joyce",
-    "victoria", "olivia", "kelly", "joan", "alice", "judy", "martha",
-    "grace", "beverly", "claire", "hillary", "hamilton", "jeff", "earl",
-    "andy", "brad", "chad", "todd", "hong", "ann", "sue", "kim",
-    # Countries, cities, places
-    "france", "england", "germany", "spain", "russia", "china", "japan",
-    "india", "canada", "australia", "mexico", "brazil", "korea", "iran",
-    "iraq", "egypt", "israel", "turkey", "ukraine", "poland", "sweden",
-    "norway", "denmark", "finland", "austria", "belgium", "portugal",
-    "greece", "switzerland", "netherlands", "argentina", "colombia",
-    "chile", "peru", "venezuela", "nigeria", "kenya", "ethiopia", "ghana",
-    "morocco", "algeria", "pakistan", "indonesia", "thailand", "vietnam",
-    "london", "paris", "berlin", "madrid", "rome", "moscow", "beijing",
-    "tokyo", "delhi", "sydney", "toronto", "chicago", "houston", "phoenix",
-    "seattle", "boston", "denver", "atlanta", "miami", "dallas", "detroit",
-    "brooklyn", "manhattan", "orleans", "angeles", "francisco", "diego",
-    "minnesota", "colorado", "california", "florida", "texas", "illinois",
-    "michigan", "ohio", "georgia", "virginia", "carolina", "dakota",
-    "tennessee", "alabama", "indiana", "kentucky", "louisiana", "oklahoma",
-    "nevada", "hawaii", "alaska", "oregon", "maryland", "connecticut",
-    # Brands
-    "netflix", "google", "twitter", "amazon", "disney", "microsoft",
-    "facebook", "instagram", "youtube", "harvard", "oxford", "stanford",
-    # Controversial terms (legitimate words but poor game targets)
-    "isis", "nazi", "jihad",
-    # Words WordNet calls nouns but are primarily adjectives/adverbs in usage
-    "young", "local", "social", "true", "least", "means", "thanks",
-    "single", "general", "whole", "entire", "following", "present",
-    "particular", "special", "natural", "personal", "national",
-    "possible", "political", "human", "foreign", "public", "private",
-    "common", "recent", "major", "minor", "final", "total", "central",
-    "federal", "digital", "official", "initial", "civil", "legal",
-    "global", "various", "certain", "further", "rather", "quite",
-    "actual", "direct", "clear", "close", "free", "open", "sure",
-    "real", "full", "half", "least", "less", "more", "most",
-    "early", "late", "later", "former", "latter", "upper", "lower",
-    "inner", "outer", "prior", "prior", "overall", "joint", "mutual",
-    "broad", "deep", "solid", "plain", "flat", "sharp", "thick",
-    "thin", "rough", "smooth", "heavy", "light", "soft", "hard",
-    "fast", "slow", "warm", "cool", "bright", "dark", "clean",
-    "fresh", "raw", "dry", "wet", "wild", "mild", "bold", "weak",
-    "rare", "rich", "poor", "fit", "fair", "odd", "wise", "safe",
-    "else", "least", "worth", "alike", "aware", "ready", "alone",
-}
-
-
-_DICT_SET: set[str] = set()
-
-def _init_dict_set(dictionary: list[str]) -> None:
-    global _DICT_SET
-    _DICT_SET = set(dictionary)
-
-
-def _is_gerund(word: str) -> bool:
-    """True if word is a gerund (verb+ing) whose base verb is in the dictionary."""
-    if not word.endswith("ing"):
-        return False
-    stem = word[:-3]
-    if stem in _DICT_SET:
-        return True
-    if (stem + "e") in _DICT_SET:          # making → make
-        return True
-    if len(stem) >= 2 and stem[-1] == stem[-2] and stem[:-1] in _DICT_SET:
-        return True                         # running → run
-    # y→ie: dying → die, lying → lie
-    if stem.endswith("y") and (stem[:-1] + "ie") in _DICT_SET:
-        return True
-    # Also check common verb stems not in dict (stripped by function-word filter)
-    EXTRA_VERB_STEMS = {"us", "go", "do", "be", "hav", "mak", "tak", "giv",
-                        "com", "say", "see", "get", "kno", "fol", "wor"}
-    if stem in EXTRA_VERB_STEMS or (stem + "e") in EXTRA_VERB_STEMS:
-        return True
+    for s in wordnet.synsets(w):
+        for lemma in s.lemmas():
+            if lemma.name() == w:
+                return True
     return False
 
 
-IRREGULAR_PAST = {
-    "saw", "came", "went", "got", "made", "took", "gave", "knew", "told",
-    "felt", "left", "kept", "sent", "held", "read", "led", "met",
-    "ran", "sat", "set", "won", "put", "cut", "hit", "let", "bit", "ate",
-    "drank", "sang", "rang", "swam", "drove", "wrote", "rode", "rose",
-    "wore", "bore", "tore", "swore", "chose", "froze", "spoke", "broke",
-    "woke", "stole", "began", "drew", "grew", "flew", "threw", "blew",
-    "sold", "slept", "wept", "meant", "bent", "lent", "spent",
-    "built", "dealt", "dreamt", "leapt", "lost", "cost", "hurt", "quit", "shed",
-    "seen", "been", "gone", "done", "come", "given", "taken", "written",
-    "hidden", "bitten", "risen", "driven", "ridden", "fallen",
-    "blown", "grown", "known", "shown", "thrown", "flown", "drawn",
-    "worn", "torn", "sworn", "chosen", "frozen", "spoken", "broken",
-    "stolen", "woken", "begun", "forbidden", "forgotten", "gotten",
-    "found", "bound", "wound", "ground", "heard",
-    "paid", "laid", "led", "fed", "bred", "bled", "sped", "taught", "caught",
-    "bought", "fought", "thought", "brought", "sought",
-}
+def is_common_english_word(w: str) -> bool:
+    """True if w (or its base form) is a lowercase WordNet lemma.
+
+    Checking the BASE form keeps inflections (dogs → dog) while still
+    rejecting capitalized-only words. morphy overgenerates on short
+    junk ("der" → comparative of "d"), so bases under 3 chars don't count.
+    """
+    if w in MODERN_ALLOWLIST or w in DEMONYM_ALLOWLIST:
+        return True
+    for pos in ("n", "v", "a", "r"):
+        base = wordnet.morphy(w, pos)
+        if base and len(base) >= 3 and has_lowercase_lemma(base):
+            return True
+    return False
 
 
-def is_good_target(word: str, freq: float) -> bool:
-    if word in FUNCTION_WORDS or word in PROFANITY:
+def is_valid_dictionary_word(w: str) -> bool:
+    if not (3 <= len(w) <= 14):
         return False
-    if word in PROPER_NOUN_BLOCKLIST or word in IRREGULAR_PAST:
+    if not (w.isalpha() and w.isascii() and w == w.lower()):
         return False
-    # Gerunds are poor targets even when WordNet classifies them as nouns
-    if _is_gerund(word):
+    if w in FUNCTION_WORDS or w in BLOCKLIST or w in BRAND_BLOCKLIST:
         return False
-    # Frequency range: common enough to know, rare enough to be interesting
-    if freq < 1e-6 or freq > 3e-4:
+    if w in _NAME_SET:
         return False
-    # Length sweet spot
-    if not (4 <= len(word) <= 10):
+    return is_common_english_word(w)
+
+
+def is_dominantly_noun(w: str) -> bool:
+    """True if w is USED mostly as a noun, not merely listed as one.
+
+    wordnet.synsets() orders noun senses first regardless of real usage
+    ("general", "young" lead with obscure noun senses), so sense order is
+    useless here. SemCor lemma counts give actual usage frequency per
+    part of speech; fall back to synset-count majority for rare words
+    with no count data.
+    """
+    noun_count = 0
+    total_count = 0
+    noun_synsets = 0
+    other_synsets = 0
+    for s in wordnet.synsets(w):
+        is_noun = s.pos() == "n"
+        if is_noun:
+            if s.instance_hypernyms():
+                return False  # proper-noun sense present
+            noun_synsets += 1
+        else:
+            other_synsets += 1
+        for lemma in s.lemmas():
+            if lemma.name().lower() == w:
+                c = lemma.count()
+                total_count += c
+                if is_noun:
+                    noun_count += c
+    if noun_synsets == 0:
         return False
-    # Abstract suffixes that sneak through as WordNet nouns
-    if any(word.endswith(s) for s in {
-        "ness", "ment", "tion", "sion", "ism", "ity", "ogy", "phy",
-        "ible", "able", "ival", "ical",
-    }):
+    if total_count >= 3:
+        return noun_count / total_count >= 0.55
+    return noun_synsets >= other_synsets
+
+
+def is_base_form(w: str, dict_set: set[str]) -> bool:
+    """Excludes plurals and inflections; targets must be their own lemma."""
+    if wordnet.morphy(w, "n") != w:
+        return False  # cats → cat
+    # Plural-only lemmas ("thanks", "means", "finances") sneak past morphy;
+    # if stripping the s/es yields another dictionary word, it's a plural
+    if w.endswith("s") and (w[:-1] in dict_set or w[:-2] in dict_set):
         return False
     return True
 
 
+def is_good_target(w: str, freq: float, dict_set: set[str]) -> bool:
+    if w in TARGET_BLOCKLIST or w in MODERN_ALLOWLIST or w in NUMBER_WORDS:
+        return False
+    if not (4 <= len(w) <= 10):
+        return False
+    # Familiar enough to know, rare enough to be interesting
+    if freq < 1e-6 or freq > 3e-4:
+        return False
+    if w.endswith("ing"):  # gerunds make mushy targets
+        return False
+    if not has_lowercase_lemma(w):  # english, romanian, york
+        return False
+    return is_base_form(w, dict_set) and is_dominantly_noun(w)
+
+
 def main():
-    ensure_wordnet()
+    ensure_corpora()
+    init_name_set()
     os.makedirs("data", exist_ok=True)
 
-    # ── Dictionary ────────────────────────────────────────────────────────
-    print("Fetching top 150k words from wordfreq (English)...")
-    candidates = top_n_list("en", 150_000)
+    print("Fetching top 200k words from wordfreq (English)...")
+    candidates = top_n_list("en", 200_000)
 
-    print("Filtering to valid content words...")
-    dictionary = [w for w in candidates if is_valid_dictionary_word(w)][:20_000]
+    print("Filtering dictionary (WordNet-gated, proper-noun-free)...")
+    dictionary = []
+    for w in candidates:
+        if is_valid_dictionary_word(w):
+            dictionary.append(w)
+            if len(dictionary) == DICTIONARY_SIZE:
+                break
     print(f"Dictionary size: {len(dictionary)}")
 
     with open("data/dictionary.json", "w") as f:
-        json.dump(dictionary, f, indent=None, separators=(",", ":"))
+        json.dump(dictionary, f, separators=(",", ":"))
     print("Wrote data/dictionary.json")
 
-    # ── Targets ───────────────────────────────────────────────────────────
-    print("\nLoading WordNet nouns...")
-    all_nouns = get_wordnet_nouns()
-    print(f"WordNet noun lemmas: {len(all_nouns)}")
-
-    # Keep only nouns that are also in our guessable dictionary
+    print("\nSelecting targets...")
     dict_set = set(dictionary)
-    candidate_nouns = [w for w in all_nouns if w in dict_set]
-    print(f"Nouns in dictionary: {len(candidate_nouns)}")
-
-    # Build stem cache before gerund detection
-    _init_dict_set(dictionary)
-
-    # Score by wordfreq frequency, filter, sort most-common first
     scored = []
-    for w in candidate_nouns:
+    for w in dictionary:
         freq = word_frequency(w, "en")
-        if is_good_target(w, freq):
+        if is_good_target(w, freq, dict_set):
             scored.append((freq, w))
-
     scored.sort(reverse=True)
-    targets = [w for _, w in scored][:3000]
+    targets = [w for _, w in scored][:TARGET_POOL_SIZE]
 
     print(f"Target pool size: {len(targets)}")
     with open("data/targets.json", "w") as f:
-        json.dump(targets, f, indent=None, separators=(",", ":"))
+        json.dump(targets, f, separators=(",", ":"))
     print("Wrote data/targets.json")
 
-    print("\nSample dictionary words (first 30):")
-    print(dictionary[:30])
-    print("\nSample target words (first 30):")
-    print(targets[:30])
-
-    # Sanity checks
-    bad = [w for w in dictionary[:50] if w in FUNCTION_WORDS]
-    if bad:
-        print(f"\nWARNING: function words in top-50: {bad}")
-    else:
-        print("\nFunction word check passed.")
-
-    print("\nDone. Review data/targets.json before running precompute.py.")
+    print("\nFirst 30 dictionary words:", dictionary[:30])
+    print("\nFirst 30 targets:", targets[:30])
+    print("\nLast 10 targets (rarest):", targets[-10:])
 
 
 if __name__ == "__main__":

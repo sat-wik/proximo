@@ -7,8 +7,9 @@ const RANKS_DIR = join(__dirname, '../../../../data/ranks');
 const RANKS_BUCKET_URL = process.env.RANKS_BUCKET_URL; // e.g. "https://pub-xxx.r2.dev"
 
 // LRU cache: keep the last N loaded targets in memory.
-// Each rank table is ~300 KB; 100 tables ≈ 30 MB.
-const MAX_CACHE_SIZE = 100;
+// Each 25k-word table is ~2-3 MB as a live JS object; 60 tables is a
+// comfortable ceiling for a small Railway instance.
+const MAX_CACHE_SIZE = 60;
 const cache = new Map<string, Promise<Record<string, number>>>();
 const byRankCache = new Map<string, string[]>();
 

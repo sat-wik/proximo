@@ -1,5 +1,6 @@
 // Pure guess-selection logic for the bot. All randomness comes in through
 // the injected rng (0 ≤ rng() < 1) so behavior is fully testable.
+import { DICTIONARY_SIZE } from '@closer/shared';
 
 // Tuning knobs — these set how human the bot feels and how long rounds run.
 // Difficulty lives mostly in KILL_TURN_*: later kills give the human more
@@ -18,7 +19,7 @@ const OPENING_MAX = 7000;
 const MISS_CHANCE = 0.22; // exploratory miss: visibly regress instead of converging
 const MISS_FACTOR_MIN = 1.8;
 const MISS_FACTOR_MAX = 4.0;
-const MISS_RANK_CAP = 15000;
+const MISS_RANK_CAP = Math.round(DICTIONARY_SIZE * 0.75);
 const PLATEAU_CHANCE = 0.28; // circle the current neighborhood without improving
 const PLATEAU_FACTOR_MIN = 0.85;
 const PLATEAU_FACTOR_MAX = 1.6;
@@ -28,7 +29,7 @@ const PIGGYBACK_CHANCE = 0.35; // riff off the human's best word when they lead
 const PIGGYBACK_FACTOR_MIN = 0.7;
 const PIGGYBACK_FACTOR_MAX = 1.3;
 const PIGGYBACK_ANCHOR_MIN = 30; // never piggyback straight into sniping range
-const MAX_RANK = 19999;
+const MAX_RANK = DICTIONARY_SIZE - 1;
 
 const THINK_OPENING_FACTOR = 0.6; // early guesses are low-effort
 const THINK_ENDGAME_FACTOR = 1.35; // closing in takes focus

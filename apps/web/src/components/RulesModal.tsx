@@ -21,12 +21,12 @@ export default function RulesModal({ onClose }: Props) {
           <Rule title="The goal">
             Each round hides a secret target word. You and your opponent take turns
             guessing single words — the closer your word is in <em>meaning</em>, the
-            better its rank. Rank #1 is the target itself; #20,000 is totally unrelated.
+            better its rank. Rank #1 is the target itself; #25,000 is totally unrelated.
           </Rule>
 
           <Rule title="Scoring">
-            Every guess earns <span className="text-white font-medium">20,000 ÷ rank</span> points
-            — a rank #100 word scores 200, a rank #4,000 word scores 5.{' '}
+            Every guess earns <span className="text-white font-medium">25,000 ÷ rank</span> points
+            — a rank #100 word scores 250, a rank #5,000 word scores 5.{' '}
             <span className="text-white font-medium">Highest total score wins.</span>
           </Rule>
 
@@ -50,7 +50,7 @@ export default function RulesModal({ onClose }: Props) {
 
           <Rule title="The kill">
             Guess the exact target word to end the round and bank{' '}
-            <span className="text-white font-medium">20,000 points</span>. Watch your
+            <span className="text-white font-medium">25,000 points</span>. Watch your
             opponent's best words — they're clues you can snipe from.
           </Rule>
 
