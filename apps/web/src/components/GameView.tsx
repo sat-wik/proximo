@@ -397,8 +397,10 @@ export default function GameView({
           </div>
 
           <div className="flex-1 flex items-center justify-end gap-1.5 sm:gap-2">
-            <span className="hidden sm:inline text-xs text-slate-600">
-              {state.guesses.length} guess{state.guesses.length !== 1 ? 'es' : ''}
+            <span className="text-[10px] sm:text-xs text-slate-600 text-right leading-tight">
+              {state.guesses.length}
+              <br />
+              guess{state.guesses.length !== 1 ? 'es' : ''}
             </span>
             {state.phase === 'playing' && !state.giveUpRequest && (
               <button
