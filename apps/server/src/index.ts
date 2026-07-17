@@ -2,7 +2,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import websocket from '@fastify/websocket';
-import { createSession } from './session-store.js';
+import { createSession, countLivePlayers } from './session-store.js';
 import { handleSignaling } from './routes/signal.js';
 import { quickMatch } from './matchmaking.js';
 
@@ -18,6 +18,10 @@ const createLimit = { config: { rateLimit: { max: 10, timeWindow: '1 minute' } }
 
 server.get('/health', async () => {
   return { status: 'ok' };
+});
+
+server.get('/stats', async () => {
+  return { playersOnline: countLivePlayers() };
 });
 
 server.post('/session', createLimit, async (_request, reply) => {

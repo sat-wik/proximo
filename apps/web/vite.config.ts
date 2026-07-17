@@ -11,6 +11,7 @@ export default defineConfig({
       '/session': 'http://localhost:3001',
       '/quick-match': 'http://localhost:3001',
       '/health': 'http://localhost:3001',
+      '/stats': 'http://localhost:3001',
       '/signal': {
         target: 'ws://localhost:3001',
         ws: true,

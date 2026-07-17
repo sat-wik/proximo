@@ -94,6 +94,16 @@ export function touchSession(_id: string): void {
   persist();
 }
 
+/** Humans with a live socket right now (bots don't count). */
+export function countLivePlayers(): number {
+  let count = 0;
+  for (const s of sessions.values()) {
+    if (s.host?.readyState === 1) count++;
+    if (s.guest?.readyState === 1) count++;
+  }
+  return count;
+}
+
 // Prune stale sessions; finished matches go sooner to free memory under load
 setInterval(() => {
   const now = Date.now();
