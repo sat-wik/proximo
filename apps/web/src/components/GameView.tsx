@@ -372,8 +372,10 @@ export default function GameView({
 
       {/* ── Header ── */}
       <header className="flex-none border-b border-slate-800 px-4 py-3">
-        <div className="relative flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex items-center gap-3 sm:gap-4">
+          {/* Equal flex halves keep the round counter centered when there's
+              room, and push it (never overlap it) when scores grow wide */}
+          <div className="flex-1 flex items-center gap-2 sm:gap-3">
             <ScoreChip
               label="You"
               score={myTotal}
@@ -387,16 +389,14 @@ export default function GameView({
             />
           </div>
 
-          {/* In-flow on mobile (justify-between spaces it, no overlap possible);
-              absolutely centered on wider screens where there's room */}
-          <div className="flex flex-col items-center sm:absolute sm:left-1/2 sm:-translate-x-1/2">
+          <div className="flex-none flex flex-col items-center">
             <span className="text-[10px] uppercase tracking-widest text-slate-500">Round</span>
             <span className="text-sm font-bold text-white leading-tight">
               {state.round} / 3
             </span>
           </div>
 
-          <div className="flex items-center justify-end gap-1.5 sm:gap-2 sm:w-28">
+          <div className="flex-1 flex items-center justify-end gap-1.5 sm:gap-2">
             <span className="hidden sm:inline text-xs text-slate-600">
               {state.guesses.length} guess{state.guesses.length !== 1 ? 'es' : ''}
             </span>
