@@ -372,8 +372,8 @@ export default function GameView({
 
       {/* ── Header ── */}
       <header className="flex-none border-b border-slate-800 px-4 py-3">
-        <div className="relative flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="relative flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 sm:gap-3">
             <ScoreChip
               label="You"
               score={myTotal}
@@ -387,16 +387,17 @@ export default function GameView({
             />
           </div>
 
-          {/* Absolutely centered so the uneven side widths can't pull it off-center */}
-          <div className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center">
+          {/* In-flow on mobile (justify-between spaces it, no overlap possible);
+              absolutely centered on wider screens where there's room */}
+          <div className="flex flex-col items-center sm:absolute sm:left-1/2 sm:-translate-x-1/2">
             <span className="text-[10px] uppercase tracking-widest text-slate-500">Round</span>
             <span className="text-sm font-bold text-white leading-tight">
               {state.round} / 3
             </span>
           </div>
 
-          <div className="w-28 flex items-center justify-end gap-2">
-            <span className="text-xs text-slate-600">
+          <div className="flex items-center justify-end gap-1.5 sm:gap-2 sm:w-28">
+            <span className="hidden sm:inline text-xs text-slate-600">
               {state.guesses.length} guess{state.guesses.length !== 1 ? 'es' : ''}
             </span>
             {state.phase === 'playing' && !state.giveUpRequest && (
@@ -817,14 +818,14 @@ export default function GameView({
 function ScoreChip({ label, score, highlight, active }: { label: string; score: number; highlight?: boolean; active?: boolean }) {
   return (
     <div
-      className={`text-center px-2 py-0.5 rounded-lg border transition-colors ${
+      className={`text-center px-1.5 sm:px-2 py-0.5 rounded-lg border transition-colors ${
         active ? 'border-emerald-600/60 bg-emerald-950/30' : 'border-transparent'
       }`}
     >
-      <p className={`text-[10px] uppercase tracking-widest mb-0.5 ${highlight ? 'text-emerald-500' : 'text-slate-500'}`}>
+      <p className={`text-[9px] sm:text-[10px] uppercase tracking-wide sm:tracking-widest mb-0.5 ${highlight ? 'text-emerald-500' : 'text-slate-500'}`}>
         {label}
       </p>
-      <p className={`text-xl font-bold tabular-nums leading-tight ${highlight ? 'text-white' : 'text-slate-400'}`}>
+      <p className={`text-base sm:text-xl font-bold tabular-nums leading-tight ${highlight ? 'text-white' : 'text-slate-400'}`}>
         {score.toLocaleString()}
       </p>
     </div>
