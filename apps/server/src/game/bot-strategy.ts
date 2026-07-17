@@ -107,15 +107,48 @@ export function pickThinkDelayMs(s: BotRoundState, minMs: number, maxMs: number,
   return Math.round(uniform(rng, minMs, maxMs) * factor);
 }
 
+const RANK_WINDOW_FACTOR = 0.3; // search ±30% around the desired rank
+const RANK_WINDOW_MIN = 8; // …but always at least this many ranks each way
+const VOCAB_COMFORT_LIMIT = 12000; // commonness index a normal person knows
+const PICK_POOL = 3; // choose among the N most common candidates
+
 /**
- * Nearest available word to the desired rank, walking outward (R, R+1, R-1,
- * R+2, …). Skips already-guessed words; skips rank 1 unless killing.
+ * Pick a word near the desired rank, preferring words a normal person
+ * would actually say. A human aiming "somewhere around this close" doesn't
+ * land on the exact rank — and never lands on "clinician" when "doctor"
+ * is nearby. We search a window around the rank, keep candidates inside
+ * everyday vocabulary (widening once if none qualify), and choose among
+ * the few most common. Skips already-guessed words; rank 1 only when
+ * killing. Without a commonness lookup, falls back to nearest-available.
  */
 export function pickWordAtRank(
   byRank: string[],
   guessed: Set<string>,
   desiredRank: number,
+  commonness?: (word: string) => number,
+  rng: () => number = Math.random,
 ): string | null {
+  if (desiredRank !== 1 && commonness) {
+    for (const widen of [1, 2.5]) {
+      const spread = Math.max(RANK_WINDOW_MIN, Math.round(desiredRank * RANK_WINDOW_FACTOR)) * widen;
+      const lo = Math.max(2, Math.round(desiredRank - spread));
+      const hi = Math.min(byRank.length, Math.round(desiredRank + spread));
+
+      const candidates: string[] = [];
+      for (let rank = lo; rank <= hi; rank++) {
+        const word = byRank[rank - 1];
+        if (word !== undefined && !guessed.has(word) && commonness(word) < VOCAB_COMFORT_LIMIT) {
+          candidates.push(word);
+        }
+      }
+      if (candidates.length > 0) {
+        candidates.sort((a, b) => commonness(a) - commonness(b));
+        return candidates[Math.floor(rng() * Math.min(PICK_POOL, candidates.length))]!;
+      }
+    }
+    // No everyday word anywhere near — fall through to nearest-available
+  }
+
   const start = Math.min(byRank.length, Math.max(1, desiredRank)) - 1;
   const minIndex = desiredRank === 1 ? 0 : 1;
 

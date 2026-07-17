@@ -90,10 +90,14 @@ FUNCTION_WORDS = {
 # slurs, profanity, explicit sexual terms, drug terms.
 # ---------------------------------------------------------------------------
 BLOCKLIST = {
-    # Slurs (never acceptable in any list)
+    # Slurs and dated offensive terms (never acceptable in any list)
     "nigger", "nigga", "niggers", "niggas", "faggot", "faggots", "fag",
     "fags", "kike", "spic", "chink", "wetback", "gook", "tranny",
     "retard", "retards", "retarded", "dyke", "coon", "raghead",
+    "negro", "negroes", "negress", "mulatto", "mulattos", "mulattoes",
+    "midget", "midgets", "darkie", "darkies", "injun", "squaw",
+    "redskin", "redskins", "spaz", "spastic", "cripple", "cripples",
+    "crippled", "eskimo", "eskimos", "hillbilly", "hillbillies",
     # Profanity
     "fuck", "fucking", "fucked", "fucker", "fuckers", "fucks", "shit",
     "shits", "shitty", "shitting", "bullshit", "horseshit", "cunt",

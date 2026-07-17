@@ -124,6 +124,40 @@ describe('pickWordAtRank', () => {
   it('clamps desired ranks beyond the table to the last word', () => {
     expect(pickWordAtRank(byRank, new Set(), 500)).toBe('delta');
   });
+
+  describe('with a commonness lookup (human vocabulary)', () => {
+    // 30-word table; word at rank r is "w<r>"
+    const table = Array.from({ length: 30 }, (_, i) => `w${i + 1}`);
+
+    it('prefers the most common word in the window over the exact rank', () => {
+      // w10 sits exactly at the desired rank but is obscure; w13 is everyday
+      const commonness = (w: string) => (w === 'w13' ? 50 : w === 'w10' ? 20000 : 11000);
+      const pick = pickWordAtRank(table, new Set(), 10, commonness, () => 0);
+      expect(pick).toBe('w13');
+    });
+
+    it('widens the window when nothing nearby is everyday vocabulary', () => {
+      // Only w25 is common; it is outside the first ±8 window around rank 10
+      const commonness = (w: string) => (w === 'w25' ? 100 : 20000);
+      const pick = pickWordAtRank(table, new Set(), 10, commonness, () => 0);
+      expect(pick).toBe('w25');
+    });
+
+    it('falls back to nearest-available when no common word exists at all', () => {
+      const commonness = () => 20000;
+      const pick = pickWordAtRank(table, new Set(), 10, commonness, () => 0);
+      expect(pick).toBe('w10');
+    });
+
+    it('never picks rank 1 and never repeats guesses', () => {
+      const commonness = () => 5;
+      for (let seed = 0; seed < 50; seed++) {
+        const pick = pickWordAtRank(table, new Set(['w2', 'w3']), 2, commonness, seededRng(seed));
+        expect(pick).not.toBe('w1');
+        expect(['w2', 'w3']).not.toContain(pick);
+      }
+    });
+  });
 });
 
 describe('pickThinkDelayMs', () => {

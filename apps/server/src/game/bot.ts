@@ -2,6 +2,7 @@ import type { Session } from '../session-store.js';
 import { getSession, touchSession } from '../session-store.js';
 import { getRandomTarget } from '../services/target-service.js';
 import { getWordsByRank } from '../services/embedding-service.js';
+import { getCommonnessLookup } from '../services/dictionary-service.js';
 import { applyGuess, applyGiveUp, applyHint, initialGameState } from './engine.js';
 import { chooseTargetRank, pickThinkDelayMs, pickWordAtRank, rollKillTurn, type BotRoundState } from './bot-strategy.js';
 
@@ -44,6 +45,7 @@ async function makeGuess(session: Session): Promise<void> {
   if (state.phase !== 'playing' || state.currentTurn !== 'guest') return;
 
   const byRank = await getWordsByRank(target);
+  const commonness = await getCommonnessLookup();
   const guessed = new Set(state.guesses.map((g) => g.word));
   const boardBestRank = state.guesses.reduce((min, g) => Math.min(min, g.rank), Infinity);
 
@@ -51,7 +53,7 @@ async function makeGuess(session: Session): Promise<void> {
   // but if it does, exclude it and try once more.
   for (let attempt = 0; attempt < 2; attempt++) {
     const desired = chooseTargetRank(bot, boardBestRank, Math.random);
-    const word = pickWordAtRank(byRank, guessed, desired);
+    const word = pickWordAtRank(byRank, guessed, desired, commonness);
     if (!word) return;
 
     const { state: next, error } = await applyGuess(state, word, 'guest', target);
