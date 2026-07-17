@@ -10,6 +10,8 @@ wins.
 Hit **Quick Match** to get paired with whoever's online; if nobody shows up
 within 20 seconds, CloserBot steps in.
 
+![A round of Proximo against CloserBot — every guess ranked by semantic similarity](docs/gameplay.png)
+
 ## How the ranking works
 
 There is no AI inference at play time.
