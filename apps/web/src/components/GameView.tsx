@@ -397,7 +397,7 @@ export default function GameView({
           </div>
 
           <div className="flex-1 flex items-center justify-end gap-1.5 sm:gap-2">
-            <span className="text-[10px] sm:text-xs text-slate-600 text-right leading-tight">
+            <span className="text-[10px] sm:text-xs text-slate-600 text-center leading-tight mr-1.5 sm:mr-2">
               {state.guesses.length}
               <br />
               guess{state.guesses.length !== 1 ? 'es' : ''}
