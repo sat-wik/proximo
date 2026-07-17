@@ -66,7 +66,7 @@ export default function RulesModal({ onClose }: Props) {
           </Rule>
 
           <Rule title="Opponents">
-            Quick Match pairs you with whoever's online — or CloserBot steps in if no
+            Quick Match pairs you with whoever's online — or a bot steps in if no
             human shows up within 20 seconds. Prefer a friend? Create a match and share
             the link.
           </Rule>

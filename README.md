@@ -8,9 +8,9 @@ wins.
 
 **Play it:** https://proximo-nine.vercel.app — no login, works on phones.
 Hit **Quick Match** to get paired with whoever's online; if nobody shows up
-within 20 seconds, CloserBot steps in.
+within 20 seconds, the bot steps in.
 
-![A round of Proximo against CloserBot — every guess ranked by semantic similarity](docs/gameplay.png)
+![A round of Proximo against the bot — every guess ranked by semantic similarity](docs/gameplay.png)
 
 ## How the ranking works
 
@@ -33,7 +33,7 @@ interesting on the way down.
 
 ## The bot
 
-CloserBot doesn't call a language model either. It plays directly off the same
+The bot doesn't call a language model either. It plays directly off the same
 rank tables: it opens vague, converges multiplicatively with deliberate
 plateaus and misses, sometimes riffs off *your* best word, and only goes for
 the kill once it's genuinely close. To keep its vocabulary human, it searches

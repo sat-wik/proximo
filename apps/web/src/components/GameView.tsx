@@ -190,7 +190,7 @@ export default function GameView({
   const prevGiveUpReqRef = useRef(state.giveUpRequest);
 
   const isMyTurn = state.currentTurn === myRole && state.phase === 'playing';
-  const opponentName = state.vsBot ? 'CloserBot' : 'Friend';
+  const opponentName = state.vsBot ? 'Bot' : 'Friend';
 
   const totalScores = {
     host:  state.roundScores.reduce((s, r) => s + r.host,  0) + state.scores.host,
@@ -319,7 +319,7 @@ export default function GameView({
   const shareLines = buildShareLines(state, myRole);
   const shareText = [
     `Proximo 🎯 I ${state.matchWinner === myRole ? 'beat' : 'lost to'} ${
-      state.vsBot ? 'CloserBot 🤖' : 'a human'
+      state.vsBot ? 'the bot 🤖' : 'a human'
     } ${myTotal.toLocaleString()}–${theirTotal.toLocaleString()}`,
     ...shareLines,
     window.location.origin,
@@ -383,7 +383,7 @@ export default function GameView({
               active={state.phase === 'playing' && state.currentTurn === myRole}
             />
             <ScoreChip
-              label={state.vsBot ? 'CloserBot' : 'Friend'}
+              label={state.vsBot ? 'Bot' : 'Friend'}
               score={theirTotal}
               active={state.phase === 'playing' && state.currentTurn !== myRole}
             />

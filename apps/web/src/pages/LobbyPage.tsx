@@ -226,7 +226,7 @@ export default function LobbyPage() {
           <PlayerSlot
             label={
               matchReveal
-                ? (role === 'guest' ? 'You' : matchReveal === 'bot' ? 'CloserBot' : 'Player')
+                ? (role === 'guest' ? 'You' : matchReveal === 'bot' ? 'Bot' : 'Player')
                 : lobbyState === 'ready'
                   ? (role === 'guest' ? 'You' : isQuickMatch ? 'Opponent' : 'Friend')
                   : '…'
@@ -249,7 +249,7 @@ export default function LobbyPage() {
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               <p className="text-emerald-400 font-semibold">
-                Matched with {matchReveal === 'bot' ? 'CloserBot 🤖' : 'a player'}!
+                Matched with {matchReveal === 'bot' ? 'the bot 🤖' : 'a player'}!
               </p>
             </div>
             <p className="text-slate-500 text-sm">Game starting…</p>
@@ -261,7 +261,7 @@ export default function LobbyPage() {
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               <p className="text-slate-300 font-medium">
-                {secondsLeft === 0 ? 'Summoning CloserBot…' : 'Finding an opponent…'}
+                {secondsLeft === 0 ? 'Summoning the bot…' : 'Finding an opponent…'}
               </p>
             </div>
             <p className="text-slate-500 text-sm text-center">
